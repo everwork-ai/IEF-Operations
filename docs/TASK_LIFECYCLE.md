@@ -33,6 +33,20 @@ running → failed | cancelled
 
 **Note on `escalated`:** Escalated is treated as a quasi-terminal state. It indicates the task has exceeded normal resolution capacity and requires Program Agent intervention. A task in `escalated` can transition back to `blocked` (and then potentially `resumed`) after Program Agent action, but this path is governed by Program-level coordination, not by normal Operations flow.
 
+### 1.2 Agent Stop-Point Rule
+
+AI coding agents must stop at the suspended, review, or escalation states rather than continuing autonomously:
+
+| State | Agent requirement |
+|---|---|
+| `waiting_input` | Request missing input and stop. Do not guess durable facts. |
+| `waiting_approval` | Request approval and stop. Do not self-approve. |
+| `blocked` | Record blocker and stop until unblocked or escalated. |
+| `review_pending` | Attach output evidence and request review. Do not self-complete. |
+| `escalated` | Stop and wait for Program Agent / Human Owner intervention. |
+
+These stop-point rules support the Operations conformance model in `IEF_OPERATIONS_V0.md`.
+
 ---
 
 ## 2. Task State Definitions
@@ -397,7 +411,7 @@ Operations defines the allowed values for `TaskEnvelope.status`. The mapping is:
 | `cancelled` | cancelled |
 | `escalated` | escalated |
 
-These values are **constrained by Operations**. The `TaskEnvelope` schema (defined in IEF-Protocol) provides the `status` field; Operations defines which values are valid and how they transition.
+These values are **constrained by Operations**. The `TaskEnvelope` schema is defined in the merged Protocol v0.1.0 baseline; Operations defines which values are valid and how they transition.
 
 ---
 
@@ -428,9 +442,10 @@ Each task state transition corresponds to one or more `RunEvent` types:
 
 | Reference | Relationship |
 |---|---|
-| [IEF_OPERATIONS_V0.md](./IEF_OPERATIONS_V0.md) | Operations overview and positioning |
+| [IEF_OPERATIONS_V0.md](./IEF_OPERATIONS_V0.md) | Operations overview, positioning, and AI coding agent conformance model |
 | [RUN_LEDGER.md](./RUN_LEDGER.md) | Run lifecycle and ledger rules |
 | [IEF-Program#6](https://github.com/everwork-ai/IEF-Program/issues/6) | P1-Contracts execution plan |
+| [IEF-Program#9](https://github.com/everwork-ai/IEF-Program/issues/9) | Operations-led multi-agent execution solidity plan |
 | [IEF-Governance#2](https://github.com/everwork-ai/IEF-Governance/issues/2) | Contract-Critical profile definition |
 | [IEF-Protocol#2](https://github.com/everwork-ai/IEF-Protocol/issues/2) | TaskEnvelope and RunEvent schema definitions |
-| [IEF-Protocol#3](https://github.com/everwork-ai/IEF-Protocol/pull/3) | Draft Protocol PR — referenced as draft contract |
+| [IEF-Protocol#3](https://github.com/everwork-ai/IEF-Protocol/pull/3) | Merged Protocol v0.1.0 baseline |
