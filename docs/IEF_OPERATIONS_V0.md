@@ -119,7 +119,7 @@ For v0, Operations is responsible for:
 4. **Protocol object usage** — Define how `TaskEnvelope`, `RunEvent`, `ArtifactRef`, and `ContextRef` are used without redefining schemas.
 5. **Governance alignment** — Specify which transitions require review or approval according to Governance profiles.
 6. **Agent conformance** — Define how AI coding agents must obey lifecycle, gates, evidence, and ledger expectations.
-7. **Downstream readiness** — Produce definitions complete enough for Runners, Knowledge, and Adapters to begin contract planning, not implementation.
+7. **Downstream readiness gate** — Produce definitions complete enough for Runners, Knowledge, and Adapters to begin contract planning only after this Operations PR is reviewed and approved for that purpose by Program Controller / Human Owner.
 
 ---
 
@@ -135,8 +135,9 @@ draft → ready → assigned → running
                                 ├── waiting_approval
                                 ├── blocked
                                 ├── review_pending
+                                ├── completed
                                 └── failed / cancelled
-running → review_pending → completed / failed
+running → completed / review_pending / failed / cancelled
 blocked → escalated
 waiting_input / waiting_approval / blocked → resumed → running
 ```
@@ -170,10 +171,11 @@ The run ledger is an append-only record of what happened during execution. It is
 Core ledger principles:
 
 1. **Append-only** — Events are appended, not rewritten.
-2. **Immutable** — Corrections use compensating events.
+2. **Immutable** — Corrections use compensating or correction events.
 3. **Ordered** — Events are ordered by `sequence` within a run.
 4. **Typed** — `event_type` maps to transition or activity semantics.
 5. **Protocol-aligned** — Every event is a `RunEvent` as defined by IEF-Protocol.
+6. **Terminal-state safe** — Correction events must not move a task out of a terminal state.
 
 Full ledger rules are in [RUN_LEDGER.md](./RUN_LEDGER.md).
 
@@ -232,6 +234,7 @@ An AI coding agent must:
 3. Not continue autonomously across approval or review gates.
 4. Not self-approve human/Program gates.
 5. Not mark a task complete without required artifacts, evidence, and review outcome.
+6. Use direct `running → completed` only when the governance profile does not require review and acceptance evidence is complete.
 
 ### 8.3 Evidence Obedience
 
@@ -247,7 +250,7 @@ An AI coding agent must attach evidence before claiming progress or completion:
 | Needs approval | `approval_requested` evidence with approver target |
 | Blocked | `task_blocked` evidence with blocker reason and unblock condition |
 | Ready for review | `review_requested` evidence and ArtifactRef-style output references |
-| Completed | `review_completed` / approval evidence and final artifact list |
+| Completed | `review_completed` / approval evidence where required, or no-review completion evidence and final artifact list |
 
 Implementation-Controlled work must provide test evidence according to Governance profile. Dry-run evidence is supplemental and must not substitute for required L1/L2/L3 evidence where Governance requires it.
 
@@ -274,6 +277,7 @@ Minimum expected event mappings:
 | Task failed | `task_failed` |
 | Task cancelled | `task_cancelled` |
 | Task escalated | `task_escalated` |
+| Ledger correction | `ledger_correction` |
 
 If a tool cannot emit structured `RunEvent` objects yet, it must report equivalent evidence in GitHub issue/PR comments so a future runner/adapter can map it into the ledger.
 
@@ -307,7 +311,7 @@ For large projects with multiple agents working in parallel:
 2. Agents must not share implicit state through chat memory; shared state must be in GitHub, Protocol objects, or ContextRef-compatible evidence.
 3. Cross-agent dependency must be represented as `blocked`, `waiting_input`, or `waiting_approval`, not informal prose only.
 4. Program Controller decides when downstream repos are unblocked.
-5. Runners, Knowledge, and Adapters must begin with contract planning after Operations is reviewable; they must not start implementation from partial assumptions.
+5. Runners, Knowledge, and Adapters must remain blocked from contract planning and implementation until this Operations PR is reviewed and Program Controller / Human Owner explicitly unblocks the next stage.
 6. Stage reviews must convert non-blocking findings into follow-up issues rather than expanding the active PR indefinitely.
 
 ---
@@ -351,12 +355,12 @@ These gates are defined in `TASK_LIFECYCLE.md` and are consistent with the Contr
 | [IEF-Governance#2](https://github.com/everwork-ai/IEF-Governance/issues/2) | Contract-Critical profile governing this PR |
 | [IEF-Protocol#2](https://github.com/everwork-ai/IEF-Protocol/issues/2) | Shared object model issue |
 | [IEF-Protocol#3](https://github.com/everwork-ai/IEF-Protocol/pull/3) | Merged Protocol v0.1.0 baseline |
-| [IEF-Runners#2](https://github.com/everwork-ai/IEF-Runners/issues/2) | Blocked until Operations is reviewable |
-| [IEF-Knowledge#2](https://github.com/everwork-ai/IEF-Knowledge/issues/2) | Blocked until Operations is reviewable |
-| [IEF-Adapters#2](https://github.com/everwork-ai/IEF-Adapters/issues/2) | Blocked until Operations is reviewable |
+| [IEF-Runners#2](https://github.com/everwork-ai/IEF-Runners/issues/2) | Blocked until Operations PR is reviewed and next-stage planning is explicitly unblocked |
+| [IEF-Knowledge#2](https://github.com/everwork-ai/IEF-Knowledge/issues/2) | Blocked until Operations PR is reviewed and next-stage planning is explicitly unblocked |
+| [IEF-Adapters#2](https://github.com/everwork-ai/IEF-Adapters/issues/2) | Blocked until Operations PR is reviewed and next-stage planning is explicitly unblocked |
 
 ---
 
 ## 11. Review Status
 
-This document is aligned to merged Protocol v0.1.0 and is ready for Program Controller review after PR body alignment. `TASK_LIFECYCLE.md` and `RUN_LEDGER.md` remain the detailed lifecycle and ledger references. If later review finds inconsistencies, they should be fixed through focused follow-up changes rather than expanding scope indefinitely.
+This document is aligned to merged Protocol v0.1.0 and is under formal review. `TASK_LIFECYCLE.md` and `RUN_LEDGER.md` remain the detailed lifecycle and ledger references. Downstream contract planning must remain blocked until this Operations PR is reviewed and Program Controller / Human Owner explicitly opens the next stage.
