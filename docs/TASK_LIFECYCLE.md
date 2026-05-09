@@ -11,13 +11,15 @@ draft → ready → assigned → running
                                 ├── waiting_input
                                 ├── waiting_approval
                                 ├── blocked
-                                └── review_pending
+                                ├── review_pending
+                                ├── completed
+                                └── failed / cancelled
 waiting_input → resumed
 waiting_approval → resumed
 blocked → resumed | escalated
 resumed → running
 review_pending → completed | failed
-running → failed | cancelled
+running → completed | failed | cancelled
 ```
 
 ### 1.1 State Categories
@@ -96,12 +98,12 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 |---|---|
 | **Meaning** | Task is actively being executed by the assigned runner. |
 | **Entry condition** | Runner accepts assignment and starts execution; run is prepared and started. |
-| **Exit condition** | Runner reaches a point requiring input, approval, review, or encounters a blocking condition, error, or cancellation. |
-| **Allowed next states** | `waiting_input`, `waiting_approval`, `blocked`, `review_pending`, `failed`, `cancelled` |
-| **Required evidence** | `run_started` RunEvent emitted; at least one `progress` or `checkpoint_created` RunEvent |
+| **Exit condition** | Runner reaches a point requiring input, approval, review, direct completion, or encounters a blocking condition, error, or cancellation. |
+| **Allowed next states** | `waiting_input`, `waiting_approval`, `blocked`, `review_pending`, `completed`, `failed`, `cancelled` |
+| **Required evidence** | `run_started` RunEvent emitted. A subsequent `progress` or `checkpoint_created` event is recommended when progress occurs, but not required before an immediate blocker, approval gate, failure, cancellation, or direct completion is recorded. |
 | **Governance review required?** | No (governance gates apply at specific transitions out of `running`) |
 | **Human / Program Agent approval?** | No (unless task's governance profile mandates approval for certain transitions) |
-| **Corresponding RunEvent type** | `run_started` (entry), ongoing `progress` events during execution |
+| **Corresponding RunEvent type** | `run_started` (entry), optional `progress` events during execution |
 
 ### 2.5 waiting_input
 
@@ -172,13 +174,13 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 
 | Attribute | Value |
 |---|---|
-| **Meaning** | Task has finished successfully. All acceptance criteria are met and review (if required) has passed. |
-| **Entry condition** | Review approved (from `review_pending`), or task completes without requiring review (governance-profile dependent). |
+| **Meaning** | Task has finished successfully. All acceptance criteria are met and required review, if any, has passed. |
+| **Entry condition** | Review approved from `review_pending`, or direct completion from `running` when the governance profile does not require review and acceptance criteria are satisfied. |
 | **Exit condition** | Terminal state — no further transitions. |
 | **Allowed next states** | None (terminal) |
-| **Required evidence** | `task_completed` RunEvent; ArtifactRef(s) for all produced outputs; review approval evidence (if applicable) |
-| **Governance review required?** | Completion itself is the result of a governance gate (review or approval) |
-| **Human / Program Agent approval?** | Implicitly yes — completion is the outcome of an approved review |
+| **Required evidence** | `task_completed` RunEvent; ArtifactRef(s) for all produced outputs; review approval evidence if the governance profile requires review |
+| **Governance review required?** | Profile-dependent — required when the governance profile mandates review; not required for no-review profiles. |
+| **Human / Program Agent approval?** | Profile-dependent — required when review or approval gates apply. |
 | **Corresponding RunEvent type** | `task_completed` |
 
 ### 2.11 failed
@@ -234,7 +236,8 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | `running` | `waiting_input` | Runner needs external input | `task_blocked` event with `reason: waiting_input` | No | No |
 | `running` | `waiting_approval` | Governance profile requires approval at this point | `approval_requested` event | **Yes** | **Yes** (human or Program Agent) |
 | `running` | `blocked` | External dependency or resource constraint | `task_blocked` event with reason | No | No |
-| `running` | `review_pending` | Runner produces output and requests review | `review_requested` event; ArtifactRef(s) | **Yes** | **Yes** (reviewer) |
+| `running` | `review_pending` | Runner produces output that requires review | `review_requested` event; ArtifactRef(s) | **Yes** | **Yes** (reviewer) |
+| `running` | `completed` | Runner completes output and governance profile does not require review | `task_completed` event; ArtifactRef(s); acceptance evidence | Profile-dependent | Profile-dependent |
 | `running` | `failed` | Unrecoverable error | `task_failed` event with reason | No | No |
 | `running` | `cancelled` | Authorized party cancels | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `waiting_input` | `resumed` | Required input provided | `task_resumed` event with `from_state: waiting_input` | No | No |
@@ -424,7 +427,7 @@ Each task state transition corresponds to one or more `RunEvent` types:
 | Task created | `task_created` | `info` |
 | Task assigned | `task_assigned` | `info` |
 | Run started | `run_started` | `info` |
-| Task blocked (any reason) | `task_blocked` | `warning` |
+| Task blocked | `task_blocked` | `warning` |
 | Input requested | `task_blocked` (reason: `waiting_input`) | `info` |
 | Approval requested | `approval_requested` | `info` |
 | Approval received | `approval_received` | `info` |
