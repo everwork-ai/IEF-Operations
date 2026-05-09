@@ -209,8 +209,12 @@ When context is attached to a task during execution:
 
 #### Approval
 
+Approval gates must be recorded with approval-specific events, not generic blocker events:
+
 - Request: `approval_requested` RunEvent with approval type, requested approver, and context.
 - Response: `approval_received` RunEvent with decision, approver identity, timestamp, and optional reason.
+
+A task in `waiting_approval` must not be represented only by `task_blocked`; doing so loses the approver/context evidence required to resume safely.
 
 #### Review
 
@@ -284,10 +288,22 @@ Operations recommends the following event types for use in the run ledger. These
 
 | Event Type | When Emitted | Severity | Key Payload Fields |
 |---|---|---|---|
-| `task_blocked` | Task enters `blocked`, `waiting_input`, or `waiting_approval` | `warning` | reason, blocking_condition |
+| `task_blocked` | Task enters `blocked`, or enters `waiting_input` because required input is missing | `warning` | reason, blocking_condition or requested_input |
 | `task_resumed` | Task resumes from suspended state | `info` | from_state, resolution |
 
-### 4.6 Event Type Extension
+`waiting_approval` is intentionally excluded from `task_blocked`. Approval waits must use `approval_requested` and `approval_received` events so governance gates retain approver/context evidence.
+
+### 4.6 Correction Events
+
+Corrections are non-state-changing audit events. They must not be used to move a task out of a terminal state.
+
+| Event Type | When Emitted | Severity | Key Payload Fields |
+|---|---|---|---|
+| `ledger_correction` | A prior ledger event needs correction without changing task state | `warning` | corrected_event_id, correction_reason, corrected_fields or replacement_reference |
+
+If a task was marked `completed` erroneously, Operations must not append `task_failed` after `task_completed` to compensate. Instead, append `ledger_correction` and create a follow-up task or authorized remediation workflow if additional work is required.
+
+### 4.7 Event Type Extension
 
 If a runner or operation needs to emit events not listed above:
 
@@ -348,13 +364,17 @@ Consumers should flag sequence gaps as integrity warnings. The ledger should att
 
 If two events share the same `event_id` within a run, the duplicate must be discarded. `event_id` is the deduplication key.
 
-### 6.3 Compensating Events
+### 6.3 Compensating and Correction Events
 
-When a correction is needed, a compensating event is appended:
+When a correction is needed, a compensating or correction event is appended. The correction must respect lifecycle terminal-state rules.
 
-- Example: `task_completed` followed by `task_failed` if completion was erroneous.
-- The compensating event must include a reference to the original event being corrected when possible.
-- Both the original and compensating events remain in the ledger.
+Allowed correction patterns:
+
+- Non-terminal correction: append a state-appropriate compensating event if the lifecycle permits the transition.
+- Terminal-state correction: append `ledger_correction` only; do not append a new state-changing task event after a terminal state.
+- Follow-up work: create a new task if the correction reveals additional required work.
+
+The compensating or correction event must include a reference to the original event being corrected when possible. Both the original and correction events remain in the ledger.
 
 ---
 
