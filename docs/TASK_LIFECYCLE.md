@@ -18,7 +18,7 @@ waiting_input → resumed
 waiting_approval → resumed
 blocked → resumed | escalated
 resumed → running
-review_pending → completed | failed
+review_pending → completed | failed | resumed
 running → completed | failed | cancelled
 ```
 
@@ -126,10 +126,10 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | **Entry condition** | Runner encounters a point where the task's governance profile requires approval before proceeding. |
 | **Exit condition** | Approval is granted (or denied, which may lead to `failed` or `cancelled`). |
 | **Allowed next states** | `resumed` (if approved), `failed` (if denied and unrecoverable), `cancelled` (if denied and task is cancelled) |
-| **Required evidence** | `approval_requested` RunEvent emitted; `approval_received` RunEvent with approver identity and decision |
+| **Required evidence** | `approval_requested` RunEvent emitted; `approval_received` RunEvent with approver identity and decision; `task_resumed` RunEvent required when approval leads to resumed work |
 | **Governance review required?** | Yes — this is a governance gate |
 | **Human / Program Agent approval?** | **Yes** — either human or Program Agent must explicitly approve. See Section 4 for distinction. |
-| **Corresponding RunEvent type** | `approval_requested` (entry), `approval_received` (exit) |
+| **Corresponding RunEvent type** | `approval_requested` (entry), `approval_received` and `task_resumed` (exit if approved) |
 
 ### 2.7 blocked
 
@@ -148,13 +148,13 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 
 | Attribute | Value |
 |---|---|
-| **Meaning** | Task is resuming execution after being in a suspended state (`waiting_input`, `waiting_approval`, or `blocked`). This is a transient state — the task immediately transitions to `running`. |
-| **Entry condition** | The condition that caused suspension is resolved (input provided, approval granted, blocker removed). |
+| **Meaning** | Task is resuming execution after being in a suspended or rework state (`waiting_input`, `waiting_approval`, `blocked`, or `review_pending`). This is a transient state — the task immediately transitions to `running`. |
+| **Entry condition** | The condition that caused suspension or rework is resolved (input provided, approval granted, blocker removed, or review rework instructions accepted). |
 | **Exit condition** | Runner confirms execution has resumed. |
 | **Allowed next states** | `running` |
-| **Required evidence** | `task_resumed` RunEvent emitted with `payload.from_state` indicating which suspended state the task is resuming from |
-| **Governance review required?** | Only if resuming from `waiting_approval` (approval must have been granted) |
-| **Human / Program Agent approval?** | Only if resuming from `waiting_approval` (approval evidence required) |
+| **Required evidence** | `task_resumed` RunEvent emitted with `payload.from_state` indicating which state the task is resuming from |
+| **Governance review required?** | Only if resuming from `waiting_approval` or `review_pending` after a review decision |
+| **Human / Program Agent approval?** | Only if resuming from a state that requires approval or review evidence |
 | **Corresponding RunEvent type** | `task_resumed` |
 
 ### 2.9 review_pending
@@ -163,12 +163,12 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 |---|---|
 | **Meaning** | Task execution is complete and output is awaiting review before final completion. |
 | **Entry condition** | Runner has produced output artifacts and requests review. |
-| **Exit condition** | Review is completed (approved or rejected). |
+| **Exit condition** | Review is completed (approved, rejected, or returned for rework). |
 | **Allowed next states** | `completed` (review approved), `failed` (review rejected, unrecoverable), `resumed` (review rejected with instructions to rework) |
-| **Required evidence** | `review_requested` RunEvent; ArtifactRef pointing to reviewable output; `review_completed` RunEvent with decision and reviewer identity |
+| **Required evidence** | `review_requested` RunEvent; ArtifactRef pointing to reviewable output; `review_completed` RunEvent with decision and reviewer identity; `task_completed` required when review approval leads to completion; `task_resumed` required when review leads to rework |
 | **Governance review required?** | Yes — this is a governance gate |
 | **Human / Program Agent approval?** | **Yes** — review must be performed by human or Program Agent |
-| **Corresponding RunEvent type** | `review_requested` (entry), `review_completed` (exit) |
+| **Corresponding RunEvent type** | `review_requested` (entry), `review_completed` plus `task_completed` or `task_resumed` depending on exit path |
 
 ### 2.10 completed
 
@@ -241,15 +241,15 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | `running` | `failed` | Unrecoverable error | `task_failed` event with reason | No | No |
 | `running` | `cancelled` | Authorized party cancels | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `waiting_input` | `resumed` | Required input provided | `task_resumed` event with `from_state: waiting_input` | No | No |
-| `waiting_approval` | `resumed` | Approval granted | `approval_received` event with approver and decision | **Yes** | **Yes** (human or Program Agent) |
+| `waiting_approval` | `resumed` | Approval granted | `approval_received` event with approver and decision; `task_resumed` event with `from_state: waiting_approval` | **Yes** | **Yes** (human or Program Agent) |
 | `waiting_approval` | `failed` | Approval denied and unrecoverable | `task_failed` event with denial reason | **Yes** | Decision already made |
 | `waiting_approval` | `cancelled` | Approval denied and task cancelled | `task_cancelled` event with reason | **Yes** | **Yes** (authorized party) |
 | `blocked` | `resumed` | Blocking condition resolved | `task_resumed` event with `from_state: blocked` | No | No |
 | `blocked` | `escalated` | Blocker cannot be resolved within normal operations | `task_escalated` event with reason | **Yes** | **Yes** (Program Agent) |
 | `resumed` | `running` | Runner confirms execution resumed | `run_started` event (new run or continuation) | No | No |
-| `review_pending` | `completed` | Review approved | `review_completed` event with approval; ArtifactRef(s) | **Yes** | **Yes** (reviewer) |
-| `review_pending` | `failed` | Review rejected, unrecoverable | `review_completed` event with rejection; reason | **Yes** | Decision already made |
-| `review_pending` | `resumed` | Review rejected with rework instructions | `review_completed` event with rework instructions | **Yes** | **Yes** (reviewer) |
+| `review_pending` | `completed` | Review approved | `review_completed` event with approval; `task_completed` event; ArtifactRef(s) | **Yes** | **Yes** (reviewer) |
+| `review_pending` | `failed` | Review rejected, unrecoverable | `review_completed` event with rejection; `task_failed` event; reason | **Yes** | Decision already made |
+| `review_pending` | `resumed` | Review rejected with rework instructions | `review_completed` event with rework instructions; `task_resumed` event with `from_state: review_pending` | **Yes** | **Yes** (reviewer) |
 | `escalated` | `blocked` | Program Agent intervenes and reclassifies | Program Agent action evidence; new `task_blocked` event | **Yes** | **Yes** (Program Agent) |
 
 ### 3.2 Invalid Transitions
@@ -264,6 +264,7 @@ The following transitions are **not allowed**:
 - `waiting_input` → `running` directly (must go through `resumed`)
 - `waiting_approval` → `running` directly (must go through `resumed`)
 - `blocked` → `running` directly (must go through `resumed`)
+- `review_pending` → `running` directly (must go through `resumed` when rework is required)
 - `escalated` → any state other than `blocked` (escalation must be resolved through Program Agent)
 
 ---
@@ -343,6 +344,10 @@ Approval evidence is recorded as `RunEvent` instances in the run ledger:
    - `payload.approval_timestamp`: when the approval was granted/denied
    - `payload.reason`: optional reason for the decision
 
+3. **Resume**: `task_resumed` RunEvent emitted with:
+   - `payload.from_state`: `waiting_approval`
+   - `payload.resolution`: approval decision reference
+
 ### 4.3 review_pending
 
 #### What enters review?
@@ -365,20 +370,22 @@ Review evidence consists of:
    - `payload.reviewer`: identity of the reviewer
    - `payload.review_timestamp`: when the review was completed
    - `payload.comments`: review feedback or instructions
-3. **Approval artifacts**: If the review results in an explicit approval, the approval evidence is recorded
+3. **Completion or resume evidence**:
+   - `task_completed` when review approval moves the task to `completed`
+   - `task_resumed` with `from_state: review_pending` when review returns rework
 
 #### How does review lead to completion?
 
 ```text
 review_pending → completed (review approved)
-  Evidence: review_completed event with decision: approved; all ArtifactRef(s) verified
+  Evidence: review_completed event with decision: approved; task_completed event; all ArtifactRef(s) verified
 ```
 
 #### How does review lead to failure?
 
 ```text
 review_pending → failed (review rejected, unrecoverable)
-  Evidence: review_completed event with decision: rejected; reason documented
+  Evidence: review_completed event with decision: rejected; task_failed event; reason documented
 ```
 
 This path is taken when the review identifies fundamental issues that cannot be resolved through rework within the scope of the current task.
@@ -387,7 +394,7 @@ This path is taken when the review identifies fundamental issues that cannot be 
 
 ```text
 review_pending → resumed (review rejected with rework instructions)
-  Evidence: review_completed event with decision: rework; rework instructions documented
+  Evidence: review_completed event with decision: rework; task_resumed event with from_state: review_pending; rework instructions documented
 ```
 
 The task returns to `resumed` (and then `running`) with specific rework instructions. The runner is expected to address the review feedback and re-enter `review_pending` when rework is complete.
