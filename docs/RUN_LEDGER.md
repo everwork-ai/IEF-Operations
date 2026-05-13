@@ -31,7 +31,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Meaning** | Runner has confirmed execution has begun. The run is now active. |
 | **Entry condition** | Runner accepts the prepared run and signals start. |
 | **Exit condition** | Runner begins making progress or encounters an issue. |
-| **Allowed next states** | `in_progress` |
+| **Allowed next states** | `in_progress`, `failed`, `cancelled` |
 | **Corresponding RunEvent type** | `run_started` |
 
 #### in_progress
@@ -61,7 +61,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Meaning** | Run is resuming from a checkpoint or interruption. This is a transient state — the run immediately transitions to `in_progress`. |
 | **Entry condition** | Run is restarted from a checkpoint or after an interruption. |
 | **Exit condition** | Runner confirms execution has resumed. |
-| **Allowed next states** | `in_progress` |
+| **Allowed next states** | `in_progress`, `failed`, `cancelled` |
 | **Corresponding RunEvent type** | `task_resumed` (task-level evidence); `run_started` or `progress` (run-level continuation evidence) |
 
 #### completed
