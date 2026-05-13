@@ -242,8 +242,8 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | `running` | `cancelled` | Authorized party cancels | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `waiting_input` | `resumed` | Required input provided | `task_resumed` event with `from_state: waiting_input` | No | No |
 | `waiting_approval` | `resumed` | Approval granted | `approval_received` event with approver and decision; `task_resumed` event with `from_state: waiting_approval` | **Yes** | **Yes** (human or Program Agent) |
-| `waiting_approval` | `failed` | Approval denied and unrecoverable | `task_failed` event with denial reason | **Yes** | Decision already made |
-| `waiting_approval` | `cancelled` | Approval denied and task cancelled | `task_cancelled` event with reason | **Yes** | **Yes** (authorized party) |
+| `waiting_approval` | `failed` | Approval denied and unrecoverable | `approval_received` event with denial decision and approver identity; `task_failed` event with denial reason | **Yes** | Decision already made |
+| `waiting_approval` | `cancelled` | Approval denied and task cancelled | `approval_received` event with denial decision and approver identity; `task_cancelled` event with reason | **Yes** | **Yes** (authorized party) |
 | `blocked` | `resumed` | Blocking condition resolved | `task_resumed` event with `from_state: blocked` | No | No |
 | `blocked` | `escalated` | Blocker cannot be resolved within normal operations | `task_escalated` event with reason | **Yes** | **Yes** (Program Agent) |
 | `resumed` | `running` | Runner confirms execution resumed | `run_started` event (new run or continuation) | No | No |
