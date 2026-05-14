@@ -31,7 +31,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Meaning** | Runner has confirmed execution has begun. The run is now active. |
 | **Entry condition** | Runner accepts the prepared run and signals start. |
 | **Exit condition** | Runner begins making progress or encounters an issue. |
-| **Allowed next states** | `in_progress`, `failed`, `cancelled`, `waiting_input`, `waiting_approval`, `blocked`, `review_pending` |
+| **Allowed next states** | `in_progress`, `failed`, `cancelled` (run-level); when the task enters a suspension gate (`waiting_input`, `waiting_approval`, `blocked`, `review_pending`), the run remains `started` — these are task-level state changes |
 | **Corresponding RunEvent type** | `run_started` |
 
 #### in_progress
@@ -41,7 +41,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Meaning** | Run is actively executing. Progress events are being emitted. |
 | **Entry condition** | Runner begins making progress after start. |
 | **Exit condition** | Runner reaches a checkpoint, completes execution, encounters an error, or the run is cancelled. |
-| **Allowed next states** | `checkpointed`, `completed`, `failed`, `cancelled`, `waiting_input`, `waiting_approval`, `blocked`, `review_pending` |
+| **Allowed next states** | `checkpointed`, `completed`, `failed`, `cancelled` (run-level); when the task enters a suspension gate (`waiting_input`, `waiting_approval`, `blocked`, `review_pending`), the run remains `in_progress` — these are task-level state changes |
 | **Corresponding RunEvent type** | `progress` (ongoing) |
 
 #### checkpointed
@@ -72,7 +72,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Entry condition** | Runner completes execution and produces final output. |
 | **Exit condition** | Terminal state — no further transitions. |
 | **Allowed next states** | None |
-| **Corresponding RunEvent type** | `task_completed` if task-level completion occurs, or `progress`/`artifact_produced` if completion awaits task review |
+| **Corresponding RunEvent type** | `run_completed` (run-level terminal); `task_completed` used only when completing this run also completes the task |
 
 #### failed
 
@@ -82,7 +82,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Entry condition** | Runner encounters an error that prevents completion. |
 | **Exit condition** | Terminal state — no further transitions. |
 | **Allowed next states** | None |
-| **Corresponding RunEvent type** | `task_failed` with error details in payload |
+| **Corresponding RunEvent type** | `run_failed` with error details in payload (run-level terminal); `task_failed` used only when this run failure also fails the task |
 
 #### cancelled
 
@@ -92,7 +92,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Entry condition** | Authorized party cancels the run. |
 | **Exit condition** | Terminal state — no further transitions. |
 | **Allowed next states** | None |
-| **Corresponding RunEvent type** | `task_cancelled` |
+| **Corresponding RunEvent type** | `run_cancelled` (run-level terminal); `task_cancelled` used only when this run cancellation also cancels the task |
 
 ### 1.3 Run Transition Table
 
@@ -137,9 +137,15 @@ The run ledger is an **append-only event log** that records activity during task
 
 ### 2.3 Ledger Structure
 
-The ledger is organized per run:
+The ledger is organized per run: (execution runs). Pre-run task events are recorded in a task-level stream before any run exists.
 
 ```text
+Task-level (pre-run) stream:
+├── event #0: task_created
+├── event #1: task_assigned
+└── event #2: context_attached (at assignment)
+
+Run Ledger (per-run, multiple runs per task):
 Run Ledger
 ├── Run: run-2026-001 (task: task-2026-001)
 │   ├── event #0: run_prepared
