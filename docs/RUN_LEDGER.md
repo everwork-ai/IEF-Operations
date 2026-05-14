@@ -61,7 +61,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Meaning** | Run is resuming from a checkpoint or interruption. This is a transient state — the run immediately transitions to `in_progress`. |
 | **Entry condition** | Run is restarted from a checkpoint or after an interruption. |
 | **Exit condition** | Runner confirms execution has resumed. |
-| **Allowed next states** | `in_progress`, `failed`, `cancelled`, `waiting_input`, `waiting_approval`, `blocked`, `review_pending` |
+| **Allowed next states** | `in_progress`, `failed`, `cancelled` (run-level); when the task enters a suspension gate (`waiting_input`, `waiting_approval`, `blocked`, `review_pending`), the run remains in its current state — these are task-level state changes |
 | **Corresponding RunEvent type** | `task_resumed` (task-level evidence); `run_started` or `progress` (run-level continuation evidence) |
 
 #### completed
@@ -273,6 +273,9 @@ Operations recommends the following event types for use in the run ledger. These
 |---|---|---|---|
 | `run_prepared` | Run enters `prepared` state | `info` | run_id, runner_type, context_refs_count |
 | `run_started` | Run enters `started` state | `info` | message |
+| `run_completed` | Run enters `completed` state | `info` | summary, artifact_refs_count |
+| `run_failed` | Run enters `failed` state | `error` | reason, error_details |
+| `run_cancelled` | Run enters `cancelled` state | `warning` | cancelled_by, reason |
 
 ### 4.3 Execution Events
 
