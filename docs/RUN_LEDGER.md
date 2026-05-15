@@ -103,7 +103,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | `started` | `failed` | Unrecoverable error before progress | `run_failed` RunEvent with error details |
 | `started` | `cancelled` | Run cancelled before progress | `run_cancelled` RunEvent |
 | `in_progress` | `checkpointed` | Runner saves checkpoint | `checkpoint_created` RunEvent with checkpoint data |
-| `in_progress` | `completed` | Runner finishes execution | `artifact_produced`, `review_requested`, or `run_completed` evidence depending on task lifecycle |
+| `in_progress` | `completed` | Runner finishes execution | `run_completed` RunEvent (mandatory run-level terminal); `artifact_produced` or `review_requested` evidence as appropriate |
 | `in_progress` | `failed` | Unrecoverable error | `run_failed` RunEvent with error details |
 | `in_progress` | `cancelled` | Run cancelled | `run_cancelled` RunEvent |
 | `checkpointed` | `in_progress` | Runner continues from checkpoint | `progress` RunEvent |
