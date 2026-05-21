@@ -31,9 +31,10 @@ running → completed | failed | cancelled
 | Active execution | `running`, `resumed` |
 | Suspended (waiting) | `waiting_input`, `waiting_approval`, `blocked` |
 | Review | `review_pending` |
-| Terminal | `completed`, `failed`, `cancelled`, `escalated` |
+| Terminal | `completed`, `failed`, `cancelled` |
+| Quasi-terminal | `escalated` |
 
-**Note on `escalated`:** Escalated is treated as a quasi-terminal state. It indicates the task has exceeded normal resolution capacity and requires Program Agent intervention. A task in `escalated` can transition back to `blocked` (and then potentially `resumed`) after Program Agent action, but this path is governed by Program-level coordination, not by normal Operations flow.
+**Note on `escalated`:** Escalated is classified as **quasi-terminal**, distinct from true terminal states. It indicates the task has exceeded normal resolution capacity and requires Program Agent intervention. A task in `escalated` can transition back to `blocked` (and then potentially `resumed`) after Program Agent action. Unlike true terminal states (`completed`, `failed`, `cancelled`), `escalated` has a defined recovery path governed by Program-level coordination.
 
 ### 1.2 Agent Stop-Point Rule
 
