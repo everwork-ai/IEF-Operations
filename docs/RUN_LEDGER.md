@@ -102,10 +102,12 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | `started` | `in_progress` | Runner begins making progress | `progress` RunEvent |
 | `started` | `failed` | Unrecoverable error before progress | `run_failed` RunEvent with error details |
 | `started` | `cancelled` | Run cancelled before progress | `run_cancelled` RunEvent |
+| `started` | stays `started` | Task enters a suspension gate (`waiting_input`, `waiting_approval`, `blocked`, `review_pending`); run-level state unchanged | Suspension recorded at task level via `task_blocked`, `approval_requested`, or `review_requested` |
 | `in_progress` | `checkpointed` | Runner saves checkpoint | `checkpoint_created` RunEvent with checkpoint data |
 | `in_progress` | `completed` | Runner finishes execution | `run_completed` RunEvent (mandatory run-level terminal); `artifact_produced` or `review_requested` evidence as appropriate |
 | `in_progress` | `failed` | Unrecoverable error | `run_failed` RunEvent with error details |
 | `in_progress` | `cancelled` | Run cancelled | `run_cancelled` RunEvent |
+| `in_progress` | stays `in_progress` | Task enters a suspension gate (`waiting_input`, `waiting_approval`, `blocked`, `review_pending`); run-level state unchanged | Suspension recorded at task level via `task_blocked`, `approval_requested`, or `review_requested` |
 | `checkpointed` | `in_progress` | Runner continues from checkpoint | `progress` RunEvent |
 | `checkpointed` | `resumed` | Run restarted from checkpoint | `task_resumed` RunEvent or resume evidence |
 | `resumed` | `in_progress` | Runner confirms resumed execution | `progress` RunEvent |
