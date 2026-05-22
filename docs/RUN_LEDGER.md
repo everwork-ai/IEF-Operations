@@ -111,6 +111,8 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | `checkpointed` | `in_progress` | Runner continues from checkpoint | `progress` RunEvent |
 | `checkpointed` | `resumed` | Run restarted from checkpoint | `task_resumed` RunEvent or resume evidence |
 | `resumed` | `in_progress` | Runner confirms resumed execution | `progress` RunEvent |
+| `resumed` | `failed` | Unrecoverable error immediately after resume | `run_failed` RunEvent with error details |
+| `resumed` | `cancelled` | Run cancelled immediately after resume | `run_cancelled` RunEvent |
 
 ### 1.4 Relationship Between Run and Task
 
@@ -143,31 +145,31 @@ The ledger is organized per run: (execution runs). Pre-run task events are recor
 
 ```text
 Task-level (pre-run) stream:
-├── event #0: task_created
-├── event #1: task_assigned
-└── event #2: context_attached (at assignment)
+├── T#0: task_created
+├── T#1: task_assigned
+└── T#2: context_attached (at assignment)
 
-Run Ledger (per-run, multiple runs per task):
-Run Ledger
-├── Run: run-2026-001 (task: task-2026-001, execution run)
-│   ├── event #0: run_prepared
-│   ├── event #1: run_started
-│   ├── event #2: context_attached
-│   ├── event #3: progress
-│   ├── event #4: checkpoint_created
-│   ├── event #5: artifact_produced
-│   ├── event #6: review_requested (task enters review_pending)
-│   └── event #7: run_completed (run finishes execution; task still in review_pending)
-└── Task-level stream (continues after run completion):
-│   ├── event #8: review_completed (reviewer decision, separate stream)
-│   └── event #9: task_completed (task terminal, after review approval)
-└── Run: run-2026-002 (task: task-2026-001, resumed run after rework)
-    ├── event #0: run_prepared
-    ├── event #1: run_started
-    └── ...
+Run Ledger (per-run, each run has independent sequence numbering):
+Run: run-2026-001 (task: task-2026-001, execution run)
+├── R1#0: run_prepared
+├── R1#1: run_started
+├── R1#2: context_attached
+├── R1#3: progress
+├── R1#4: checkpoint_created
+├── R1#5: artifact_produced
+├── R1#6: review_requested (task enters review_pending)
+└── R1#7: run_completed (run finishes; task still in review_pending)
+Task-level stream (continues after run completion):
+├── T#3: review_completed (reviewer decision, separate stream)
+└── T#4: task_completed (task terminal, after review approval)
+
+Run: run-2026-002 (task: task-2026-001, resumed run after rework)
+├── R2#0: run_prepared
+├── R2#1: run_started
+└── ...
 ```
 
-Each run has its own `sequence` numbering starting from 0. Cross-run ordering is established by timestamp. When a run completes while the task remains in `review_pending`, `run_completed` marks the run as terminal before review events are recorded.
+Each run has its own run-level sequence numbering (R<N>#0, R<N>#1, ...). Task-level events use independent task-level numbering (T#0, T#1, ...). Cross-run and cross-stream ordering is established by timestamp.
 
 ---
 
