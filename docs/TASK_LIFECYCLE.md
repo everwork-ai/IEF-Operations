@@ -15,8 +15,9 @@ draft → ready → assigned → running
                                 ├── completed
                                 └── failed / cancelled
 waiting_input → resumed
-waiting_approval → resumed
+waiting_approval → resumed | failed | cancelled
 blocked → resumed | escalated
+escalated → blocked
 resumed → running
 review_pending → completed | failed | resumed
 running → completed | failed | cancelled
@@ -166,7 +167,7 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | **Entry condition** | Runner has produced output artifacts and requests review. |
 | **Exit condition** | Review is completed (approved, rejected, or returned for rework). |
 | **Allowed next states** | `completed` (review approved), `failed` (review rejected, unrecoverable), `resumed` (review rejected with instructions to rework) |
-| **Required evidence** | `review_requested` RunEvent; ArtifactRef pointing to reviewable output; `review_completed` RunEvent with decision and reviewer identity; `task_completed` required when review approval leads to completion; `task_resumed` required when review leads to rework |
+| **Required evidence** | `review_requested` RunEvent; ArtifactRef pointing to reviewable output; `review_completed` RunEvent with decision and reviewer identity; `task_completed` required when review approval leads to completion; `task_failed` required when review rejection leads to failure; `task_resumed` required when review leads to rework |
 | **Governance review required?** | Yes — this is a governance gate |
 | **Human / Program Agent approval?** | **Yes** — review must be performed by human or Program Agent |
 | **Corresponding RunEvent type** | `review_requested` (entry), `review_completed` plus `task_completed` or `task_resumed` depending on exit path |
@@ -247,7 +248,7 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | `waiting_approval` | `cancelled` | Approval denied and task cancelled | `approval_received` event with denial decision and approver identity; `task_cancelled` event with reason | **Yes** | **Yes** (authorized party) |
 | `blocked` | `resumed` | Blocking condition resolved | `task_resumed` event with `from_state: blocked` | No | No |
 | `blocked` | `escalated` | Blocker cannot be resolved within normal operations | `task_escalated` event with reason | **Yes** | **Yes** (Program Agent) |
-| `resumed` | `running` | Runner confirms execution resumed | `run_started` event (new run or continuation) | No | No |
+| `resumed` | `running` | Runner confirms execution resumed | `progress` RunEvent (run continuation) or `run_started` RunEvent (new run) | No | No |
 | `review_pending` | `completed` | Review approved | `review_completed` event with approval; `task_completed` event; ArtifactRef(s) | **Yes** | **Yes** (reviewer) |
 | `review_pending` | `failed` | Review rejected, unrecoverable | `review_completed` event with rejection; `task_failed` event; reason | **Yes** | Decision already made |
 | `review_pending` | `resumed` | Review rejected with rework instructions | `review_completed` event with rework instructions; `task_resumed` event with `from_state: review_pending` | **Yes** | **Yes** (reviewer) |
