@@ -8,19 +8,20 @@ A task is a bounded unit of work managed by IEF-Operations. Its lifecycle is def
 
 ```text
 draft → ready → assigned → running
-                                ├── waiting_input
-                                ├── waiting_approval
-                                ├── blocked
-                                ├── review_pending
-                                ├── completed
-                                └── failed / cancelled
-waiting_input → resumed
-waiting_approval → resumed | failed | cancelled
-blocked → resumed | escalated
-escalated → blocked
-resumed → running
-review_pending → completed | failed | resumed
-running → completed | failed | cancelled
+  │       │         │           ├── waiting_input
+  │       │         │           ├── waiting_approval
+  │       │         │           ├── blocked
+  │       │         │           ├── review_pending
+  │       │         │           ├── completed
+  │       │         │           └── failed / cancelled
+  ↓       ↓         ↓         ───────────────────────────────
+cancelled cancelled cancelled    waiting_input → resumed | cancelled
+                                waiting_approval → resumed | failed | cancelled
+                                blocked → resumed | escalated | cancelled
+                                escalated → blocked | cancelled
+                                resumed → running
+                                review_pending → completed | failed | resumed | cancelled
+                                running → completed | failed | cancelled
 ```
 
 ### 1.1 State Categories
@@ -62,7 +63,7 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | **Meaning** | Task has been created but is not yet ready for assignment. Details may be incomplete. |
 | **Entry condition** | Task created via Program, adapter, or human request. |
 | **Exit condition** | All required fields are populated; governance profile is assigned; acceptance criteria are defined. |
-| **Allowed next states** | `ready` |
+| **Allowed next states** | `ready`, `cancelled` |
 | **Required evidence** | TaskEnvelope with `task_id`, `title`, `description`, `governance_profile`, `source`, `priority` |
 | **Governance review required?** | No |
 | **Human / Program Agent approval?** | No |
@@ -75,7 +76,7 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | **Meaning** | Task is fully specified and eligible for assignment. |
 | **Entry condition** | Task exits `draft` with all required fields populated. |
 | **Exit condition** | An assignee (runner or agent) is selected and available. |
-| **Allowed next states** | `assigned` |
+| **Allowed next states** | `assigned`, `cancelled` |
 | **Required evidence** | TaskEnvelope with all required fields; acceptance criteria documented |
 | **Governance review required?** | No |
 | **Human / Program Agent approval?** | No (Program Agent may auto-assign, but assignment itself is a separate state) |
@@ -88,7 +89,7 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | **Meaning** | Task has been assigned to a specific runner or agent but execution has not started. |
 | **Entry condition** | Assignee is determined; runner availability is confirmed. |
 | **Exit condition** | Runner accepts the task and begins execution. |
-| **Allowed next states** | `running` |
+| **Allowed next states** | `running`, `cancelled` |
 | **Required evidence** | TaskEnvelope with `assignee` set; `task_assigned` RunEvent emitted |
 | **Governance review required?** | No |
 | **Human / Program Agent approval?** | No |
@@ -114,7 +115,7 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | **Meaning** | Task execution is suspended because additional input is required from a human, another agent, or an external system. |
 | **Entry condition** | Runner determines it cannot proceed without external input (e.g., clarification, data, configuration). |
 | **Exit condition** | Required input is provided. |
-| **Allowed next states** | `resumed` |
+| **Allowed next states** | `resumed`, `cancelled` |
 | **Required evidence** | RunEvent with `event_type: task_blocked` and `payload.reason: waiting_input`; description of what input is needed |
 | **Governance review required?** | No |
 | **Human / Program Agent approval?** | Human input is required to proceed, but no formal approval gate |
@@ -140,7 +141,7 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | **Meaning** | Task execution is suspended due to an external dependency, resource constraint, or unresolvable condition that is not an approval gate. |
 | **Entry condition** | Runner determines it cannot proceed due to a blocking condition (e.g., dependency not met, resource unavailable, environment failure). |
 | **Exit condition** | Blocking condition is resolved, or task is escalated. |
-| **Allowed next states** | `resumed`, `escalated` |
+| **Allowed next states** | `resumed`, `escalated`, `cancelled` |
 | **Required evidence** | RunEvent with `event_type: task_blocked` and `payload.reason`; description of the blocking condition |
 | **Governance review required?** | No (unless escalation is triggered) |
 | **Human / Program Agent approval?** | No (for unblock), Yes (for escalation — Program Agent must intervene) |
@@ -166,7 +167,7 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | **Meaning** | Task execution is complete and output is awaiting review before final completion. |
 | **Entry condition** | Runner has produced output artifacts and requests review. |
 | **Exit condition** | Review is completed (approved, rejected, or returned for rework). |
-| **Allowed next states** | `completed` (review approved), `failed` (review rejected, unrecoverable), `resumed` (review rejected with instructions to rework) |
+| **Allowed next states** | `completed` (review approved), `failed` (review rejected, unrecoverable), `resumed` (review rejected with instructions to rework), `cancelled` |
 | **Required evidence** | `review_requested` RunEvent; ArtifactRef pointing to reviewable output; `review_completed` RunEvent with decision and reviewer identity; `task_completed` required when review approval leads to completion; `task_failed` required when review rejection leads to failure; `task_resumed` required when review leads to rework |
 | **Governance review required?** | Yes — this is a governance gate |
 | **Human / Program Agent approval?** | **Yes** — review must be performed by human or Program Agent |
@@ -218,7 +219,7 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | **Meaning** | Task has exceeded normal resolution capacity and requires Program Agent intervention. This is a quasi-terminal state. |
 | **Entry condition** | Task is `blocked` and the blocker cannot be resolved through normal operations within a defined timeout or after escalation criteria are met. |
 | **Exit condition** | Program Agent intervenes and reclassifies the task (typically back to `blocked` with new resolution path, then `resumed`). |
-| **Allowed next states** | `blocked` (after Program Agent intervention and reclassification) |
+| **Allowed next states** | `blocked` (after Program Agent intervention and reclassification), `cancelled` |
 | **Required evidence** | `task_escalated` RunEvent; `payload.escalation_reason`; `payload.escalated_to` |
 | **Governance review required?** | Yes — escalation triggers Program Agent review |
 | **Human / Program Agent approval?** | **Yes** — Program Agent must acknowledge and act on escalation |
@@ -233,8 +234,11 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | From | To | Trigger | Required Evidence | Governance Gate? | Approval Required? |
 |---|---|---|---|---|---|
 | `draft` | `ready` | All required fields populated; governance profile assigned | Complete TaskEnvelope | No | No |
+| `draft` | `cancelled` | Authorized party cancels before task is ready | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `ready` | `assigned` | Assignee selected and available | TaskEnvelope with `assignee`; `task_assigned` event | No | No |
+| `ready` | `cancelled` | Authorized party cancels before assignment | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `assigned` | `running` | Runner accepts and starts execution | `run_started` event | No | No |
+| `assigned` | `cancelled` | Authorized party cancels before execution starts | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `running` | `waiting_input` | Runner needs external input | `task_blocked` event with `reason: waiting_input` | No | No |
 | `running` | `waiting_approval` | Governance profile requires approval at this point | `approval_requested` event | **Yes** | **Yes** (human or Program Agent) |
 | `running` | `blocked` | External dependency or resource constraint | `task_blocked` event with reason | No | No |
@@ -243,31 +247,35 @@ These stop-point rules support the Operations conformance model in `IEF_OPERATIO
 | `running` | `failed` | Unrecoverable error | `task_failed` event with reason | No | No |
 | `running` | `cancelled` | Authorized party cancels | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `waiting_input` | `resumed` | Required input provided | `task_resumed` event with `from_state: waiting_input` | No | No |
+| `waiting_input` | `cancelled` | Authorized party cancels while awaiting input | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `waiting_approval` | `resumed` | Approval granted | `approval_received` event with approver and decision; `task_resumed` event with `from_state: waiting_approval` | **Yes** | **Yes** (human or Program Agent) |
 | `waiting_approval` | `failed` | Approval denied and unrecoverable | `approval_received` event with denial decision and approver identity; `task_failed` event with denial reason | **Yes** | Decision already made |
 | `waiting_approval` | `cancelled` | Approval denied and task cancelled | `approval_received` event with denial decision and approver identity; `task_cancelled` event with reason | **Yes** | **Yes** (authorized party) |
 | `blocked` | `resumed` | Blocking condition resolved | `task_resumed` event with `from_state: blocked` | No | No |
 | `blocked` | `escalated` | Blocker cannot be resolved within normal operations | `task_escalated` event with reason | **Yes** | **Yes** (Program Agent) |
+| `blocked` | `cancelled` | Authorized party cancels while blocked | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `resumed` | `running` | Runner confirms execution resumed | `progress` RunEvent (run continuation) or `run_started` RunEvent (new run) | No | No |
 | `review_pending` | `completed` | Review approved | `review_completed` event with approval; `task_completed` event; ArtifactRef(s) | **Yes** | **Yes** (reviewer) |
 | `review_pending` | `failed` | Review rejected, unrecoverable | `review_completed` event with rejection; `task_failed` event; reason | **Yes** | Decision already made |
 | `review_pending` | `resumed` | Review rejected with rework instructions | `review_completed` event with rework instructions; `task_resumed` event with `from_state: review_pending` | **Yes** | **Yes** (reviewer) |
+| `review_pending` | `cancelled` | Authorized party cancels during review | `task_cancelled` event with `cancelled_by` and reason | Profile-dependent | **Yes** (authorized party) |
 | `escalated` | `blocked` | Program Agent intervenes and reclassifies | Program Agent action evidence; new `task_blocked` event | **Yes** | **Yes** (Program Agent) |
+| `escalated` | `cancelled` | Authorized party cancels escalated task | `task_cancelled` event with `cancelled_by` and reason | **Yes** | **Yes** (authorized party) |
 
 ### 3.2 Invalid Transitions
 
 The following transitions are **not allowed**:
 
 - Any transition from a terminal state (`completed`, `failed`, `cancelled`)
-- `draft` → any state other than `ready`
-- `ready` → any state other than `assigned`
-- `assigned` → any state other than `running`
+- `draft` → any state other than `ready` or `cancelled`
+- `ready` → any state other than `assigned` or `cancelled`
+- `assigned` → any state other than `running` or `cancelled`
 - `running` → `ready` or `draft` (no backward transitions)
 - `waiting_input` → `running` directly (must go through `resumed`)
 - `waiting_approval` → `running` directly (must go through `resumed`)
 - `blocked` → `running` directly (must go through `resumed`)
 - `review_pending` → `running` directly (must go through `resumed` when rework is required)
-- `escalated` → any state other than `blocked` (escalation must be resolved through Program Agent)
+- `escalated` → any state other than `blocked` or `cancelled` (escalation must be resolved through Program Agent or cancelled)
 
 ---
 

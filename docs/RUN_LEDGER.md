@@ -10,6 +10,8 @@ A run is a single execution attempt within a task. A task may have multiple runs
 
 ```text
 prepared → started → in_progress → checkpointed → resumed → completed / failed / cancelled
+prepared → failed / cancelled
+checkpointed → failed / cancelled
 ```
 
 ### 1.2 State Definitions
@@ -21,7 +23,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Meaning** | Run has been created and configured but execution has not started. Context is attached, runner is selected, and resources are allocated. |
 | **Entry condition** | Task transitions to `running` or `resumed`; a run is created or resumed. |
 | **Exit condition** | Runner confirms it is ready to begin execution. |
-| **Allowed next states** | `started` |
+| **Allowed next states** | `started`, `failed`, `cancelled` |
 | **Corresponding RunEvent type** | `run_prepared` |
 
 #### started
@@ -51,7 +53,7 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | **Meaning** | Run has reached a checkpoint — a known-good intermediate state that can be resumed from if the run is interrupted. |
 | **Entry condition** | Runner explicitly saves a checkpoint with the current state of execution. |
 | **Exit condition** | Run continues, is interrupted, or is explicitly resumed later. |
-| **Allowed next states** | `in_progress`, `resumed` |
+| **Allowed next states** | `in_progress`, `resumed`, `failed`, `cancelled` |
 | **Corresponding RunEvent type** | `checkpoint_created` |
 
 #### resumed
@@ -99,6 +101,8 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | From | To | Trigger | Required Evidence |
 |---|---|---|---|
 | `prepared` | `started` | Runner confirms execution start | `run_started` RunEvent |
+| `prepared` | `failed` | Run fails before execution starts (e.g. resource allocation failure) | `run_failed` RunEvent with error details |
+| `prepared` | `cancelled` | Run cancelled before execution starts | `run_cancelled` RunEvent |
 | `started` | `in_progress` | Runner begins making progress | `progress` RunEvent |
 | `started` | `failed` | Unrecoverable error before progress | `run_failed` RunEvent with error details |
 | `started` | `cancelled` | Run cancelled before progress | `run_cancelled` RunEvent |
@@ -110,6 +114,8 @@ prepared → started → in_progress → checkpointed → resumed → completed 
 | `in_progress` | stays `in_progress` | Task enters a suspension gate (`waiting_input`, `waiting_approval`, `blocked`, `review_pending`); run-level state unchanged | Suspension recorded at task level via `task_blocked`, `approval_requested`, or `review_requested` |
 | `checkpointed` | `in_progress` | Runner continues from checkpoint | `progress` RunEvent |
 | `checkpointed` | `resumed` | Run restarted from checkpoint | `run_started` RunEvent (new run) or `progress` RunEvent (continuation from checkpoint) |
+| `checkpointed` | `failed` | Run fails after checkpoint (e.g. checkpoint corruption or environment failure) | `run_failed` RunEvent with error details |
+| `checkpointed` | `cancelled` | Run cancelled after checkpoint | `run_cancelled` RunEvent |
 | `resumed` | `in_progress` | Runner confirms resumed execution | `progress` RunEvent |
 | `resumed` | `failed` | Unrecoverable error immediately after resume | `run_failed` RunEvent with error details |
 | `resumed` | `cancelled` | Run cancelled immediately after resume | `run_cancelled` RunEvent |
