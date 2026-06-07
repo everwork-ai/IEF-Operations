@@ -469,3 +469,99 @@ Each task state transition corresponds to one or more `RunEvent` types:
 | [IEF-Governance#2](https://github.com/everwork-ai/IEF-Governance/issues/2) | Contract-Critical profile definition |
 | [IEF-Protocol#2](https://github.com/everwork-ai/IEF-Protocol/issues/2) | TaskEnvelope and RunEvent schema definitions |
 | [IEF-Protocol#3](https://github.com/everwork-ai/IEF-Protocol/pull/3) | Merged Protocol v0.1.0 baseline |
+
+---
+
+## 8. Stage D P0: Minimum Lifecycle State Machine (GitHub-First Closed Loop)
+
+> Source of truth: [everwork-ai/IEF-Operations#4 comment 4618600457](https://github.com/everwork-ai/IEF-Operations/issues/4#issuecomment-4618600457)
+> Boundary: Contract spec only. This section defines the minimum state machine for the GitHub-first closed loop. It does not replace Sections 1-7 above; it complements them with a narrower P0 scope.
+
+### 8.1 Minimum States
+
+For the GitHub-first closed loop, the minimum lifecycle state machine has 9 states:
+
+```text
+pending -> dispatched -> running -> completed -> accepted
+                          |           |
+                          |           +-> failed -> retried -> dispatched
+                          |           |                    \
+                          |           |                     +-> escalated
+                          |           +-> blocked -> dispatched (retry)
+                          |           |            \
+                          |           |             +-> escalated
+                          |           +-> waiting_approval -> dispatched (approved)
+                          |           |                   \
+                          |           |                    +-> failed (denied)
+                          |           +-> stopped -> dispatched (retry)
+                          |           |            \
+                          |           |             +-> escalated
+                          |           +-> cancelled
+                          |
+                          +-> escalated (dispatch failure)
+```
+
+### 8.2 State Definitions (P0 Minimum)
+
+| State | Meaning | Entry | Exit | Terminal? |
+|---|---|---|---|---|
+| `pending` | TaskEnvelope received, not yet dispatched | TaskEnvelope intake validated | `dispatched` | No |
+| `dispatched` | Operations has assigned a runner and dispatched work | Dispatch decision made | `running` | No |
+| `running` | Runner is actively executing | Runner emits `run_started` | `completed`, `failed`, `blocked`, `waiting_approval`, `stopped`, `cancelled` | No |
+| `completed` | Runner finished with exit 0; awaiting review gate | Runner emits `run_completed` + evidence | `accepted` | No (review gate pending) |
+| `failed` | Runner failed or review rejected | Runner emits `run_failed` or review rejects | `retried` (back to `dispatched`) or `escalated` | No |
+| `blocked` | Runner cannot proceed (missing input, dependency, gate) | Runner emits `run_blocked`/`run_stopped` | `dispatched` (retry after unblock) or `escalated` | No |
+| `waiting_approval` | Review gate requires external approval | Review gate triggered on `completed` | `dispatched` (approved) or `failed` (denied) | No |
+| `accepted` | Review gate accepted; task is done | Review gate approves | _(none)_ | **Yes** |
+| `escalated` | Failure needs human/Program intervention | Escalation triggered | _(none until Program resolves)_ | **Quasi-terminal** |
+
+### 8.3 Transition Rules (P0 Minimum)
+
+| From | To | Trigger | Required Evidence |
+|---|---|---|---|
+| `pending` | `dispatched` | Operations dispatches to runner | Ledger entry: `dispatched` with `runner_id`, `dispatched_at` |
+| `pending` | `escalated` | Envelope invalid or unprocessable | Ledger entry: `escalated` with reason |
+| `dispatched` | `running` | Runner emits `run_started` | Ledger entry: `run_started` with `runner_id`, `started_at` |
+| `dispatched` | `escalated` | Runner unresponsive or dispatch fails | Ledger entry: `escalated` with reason |
+| `running` | `completed` | Runner emits `run_completed` with exit_code=0 | Ledger entry: `run_completed` with `exit_code`, `finished_at`, `artifact_refs[]` |
+| `running` | `failed` | Runner emits `run_failed` | Ledger entry: `run_failed` with `error_code`, `error_message` |
+| `running` | `blocked` | Runner emits `run_blocked` or `run_stopped` | Ledger entry: `run_blocked` with `reason_code` |
+| `running` | `waiting_approval` | Governance profile requires approval mid-run | Ledger entry: `approval_requested` |
+| `running` | `stopped` | Operator signals stop | Ledger entry: `run_stopped` with `reason` |
+| `running` | `cancelled` | Operator cancels | Ledger entry: `run_cancelled` with `reason` |
+| `completed` | `accepted` | Review gate approves | Ledger entry: `review_accepted` with reviewer identity |
+| `completed` | `waiting_approval` | Review gate requires approval | Ledger entry: `approval_requested` |
+| `failed` | `dispatched` | Retry authorized | Ledger entry: `retried` with retry count |
+| `failed` | `escalated` | Failure unresolvable | Ledger entry: `escalated` with reason |
+| `blocked` | `dispatched` | Blocker resolved, retry authorized | Ledger entry: `retried` with resolution |
+| `blocked` | `escalated` | Blocker unresolvable | Ledger entry: `escalated` with reason |
+| `waiting_approval` | `dispatched` | Approval granted | Ledger entry: `approved` with approver identity |
+| `waiting_approval` | `failed` | Approval denied | Ledger entry: `denied` with reason |
+| `stopped` | `dispatched` | Operator authorizes retry | Ledger entry: `retried` |
+| `stopped` | `escalated` | Stop requires intervention | Ledger entry: `escalated` |
+
+### 8.4 Critical Rules
+
+1. **No self-approval**: A task **cannot** transition to `accepted` without an external review gate decision. A runner cannot review its own output.
+2. **No phantom completion**: A task **cannot** transition from `running` to `completed` without the runner emitting `run_completed` with `exit_code = 0` and at least one `artifact_refs[]`.
+3. **Reversibility**: The `stopped`, `cancelled`, and `blocked` states are reversible via retry (back to `dispatched`) or escalation (to `escalated`).
+4. **Terminal authority**: Only `accepted` is a true terminal state in the P0 minimum loop. `escalated` is quasi-terminal and requires Program Agent intervention to resolve.
+5. **Ledger is truth**: The ledger is the single source of truth for task state. No other system (Redis, WorkContext, status reports) defines task state.
+
+### 8.5 Relationship to Full Lifecycle (Sections 1-7)
+
+The P0 minimum state machine is a **subset** of the full 13-state lifecycle defined in Sections 1-7:
+
+| P0 Minimum State | Full Lifecycle Equivalent |
+|---|---|
+| `pending` | `draft` + `ready` |
+| `dispatched` | `assigned` |
+| `running` | `running` |
+| `completed` | `review_pending` (pre-review) |
+| `failed` | `failed` |
+| `blocked` | `blocked` + `waiting_input` |
+| `waiting_approval` | `waiting_approval` |
+| `accepted` | `completed` (post-review) |
+| `escalated` | `escalated` |
+
+The P0 minimum is used for the GitHub-first closed loop demonstration. The full lifecycle (Sections 1-7) remains the normative definition for production use.

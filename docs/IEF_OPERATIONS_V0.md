@@ -364,3 +364,107 @@ These gates are defined in `TASK_LIFECYCLE.md` and are consistent with the Contr
 ## 11. Review Status
 
 This document is aligned to merged Protocol v0.1.0 and is under formal review. `TASK_LIFECYCLE.md` and `RUN_LEDGER.md` remain the detailed lifecycle and ledger references. Downstream contract planning must remain blocked until this Operations PR is reviewed and Program Controller / Human Owner explicitly opens the next stage.
+
+---
+
+## 12. Stage D P0: Minimum Lifecycle/Ledger Path (GitHub-First Closed Loop)
+
+> Source of truth: [everwork-ai/IEF-Operations#4 comment 4618600457](https://github.com/everwork-ai/IEF-Operations/issues/4#issuecomment-4618600457)
+> Boundary: Contract spec only. No implementation code. No multi-runner orchestration. No chat/AI ingestion.
+
+This section defines the **minimum closed loop** through which a GitHub directive flows end-to-end:
+
+```text
+GitHub directive/comment
+  -> TaskEnvelope intake (from Adapters layer)
+  -> lifecycle states (pending -> dispatched -> running -> completed/failed/blocked)
+  -> RunEvent names (run_started, run_completed, run_failed, run_stopped, run_blocked, run_cancelled, run_timed_out)
+  -> append-only ledger
+  -> evidence / ArtifactRef
+  -> review gate
+  -> accepted / escalated
+```
+
+### 12.1 TaskEnvelope Intake (GitHub-First Only)
+
+Operations receives `TaskEnvelope` objects from the Adapters layer (GitHub-first ingestion only). The minimum intake contract:
+
+```text
+TaskEnvelope {
+  envelope_id: <UUID>
+  dedupe_key: <string>                    // SHA-256 from adapter
+  source_event_id: <string>               // GitHub event_id
+  source_type: "github_issue_comment" | "github_issue" | "github_pr_comment"
+  intent: "directive"
+  target_repo: <string>                   // owner/repo
+  target_pr: <number | null>
+  target_issue: <number | null>
+  actor: <string>                         // GitHub login
+  directive_text: <string>
+  branch: <string | null>
+  allowed_files: <string[] | null>
+  forbidden_actions: <string[] | null>
+  done_criteria: <string | null>
+  created_at: <ISO-8601 UTC>
+}
+```
+
+**Intake rules:**
+
+- Validate envelope against Protocol schema -> reject with `schema_validation_failed` if invalid.
+- Check `dedupe_key` against ledger -> if already processed, acknowledge but do not re-dispatch.
+- Envelope `actor` must match a known GitHub identity -> reject with `identity_unknown` if not.
+- `intent` must be `"directive"` -> other intents are logged but not dispatched in this P0 scope.
+
+### 12.2 Minimum Lifecycle States
+
+For the GitHub-first closed loop, the minimum lifecycle state machine:
+
+| State | Trigger | Next State(s) | Evidence Required |
+|---|---|---|---|
+| `pending` | TaskEnvelope intake | `dispatched` | -- |
+| `dispatched` | Ops dispatch to runner | `running` | `dispatched` ledger entry with runner_id |
+| `running` | Runner emits `started` | `completed`, `blocked`, `waiting_approval`, `failed`, `stopped`, `cancelled` | `run_started` ledger entry |
+| `completed` | Runner emits `completed` + review gate passes | `accepted` | `run_completed` + `review_accepted` |
+| `failed` | Runner emits `failed` | `retried` or `escalated` | `run_failed` with error_code |
+| `blocked` | Runner emits `blocked`/`stopped` | `dispatched` (retry) or `escalated` | `run_blocked` with reason |
+| `waiting_approval` | Review gate requires approval | `dispatched` (after approval) or `failed` (denied) | `approval_requested` |
+| `accepted` | Review gate accepts | _(terminal)_ | `review_accepted` ledger entry |
+| `escalated` | Failure needs human/Program intervention | _(terminal until Program resolves)_ | `escalation` ledger entry |
+
+**Critical rules:**
+
+- A task **cannot** transition to `accepted` without an external review gate decision. No self-approval.
+- A task **cannot** transition from `running` to `completed` without the runner emitting `completed` with `exit_code = 0`.
+- The `stopped`, `cancelled`, and `blocked` states are reversible via retry (back to `dispatched`) or escalation (to `escalated`).
+
+Full state definitions and transition rules are in [TASK_LIFECYCLE.md](./TASK_LIFECYCLE.md) Section 8.
+
+### 12.3 RunEvent Name Catalog (Minimum)
+
+Runners emit `RunEvent` objects. The minimum set for the closed loop:
+
+| RunEvent Name | When Emitted | Key Fields |
+|---|---|---|
+| `run_started` | Runner begins execution | `envelope_id`, `runner_id`, `tool_runner_type`, `started_at` |
+| `run_completed` | Runner finishes with exit 0 | `envelope_id`, `runner_id`, `exit_code`, `finished_at`, `artifact_refs[]` |
+| `run_failed` | Runner exits non-zero or errors | `envelope_id`, `runner_id`, `error_code`, `error_message`, `finished_at` |
+| `run_stopped` | Runner stops on operator signal | `envelope_id`, `runner_id`, `reason`, `stopped_at`, `partial_artifacts[]` |
+| `run_blocked` | Runner blocked by missing input/gate | `envelope_id`, `runner_id`, `reason_code`, `blocked_at` |
+| `run_cancelled` | Runner cancelled by operator | `envelope_id`, `runner_id`, `reason`, `cancelled_at` |
+| `run_timed_out` | Runner exceeds timeout | `envelope_id`, `runner_id`, `elapsed_ms`, `timeout_ms` |
+
+Full ledger schema and rules are in [RUN_LEDGER.md](./RUN_LEDGER.md) Section 8.
+
+### 12.4 Scope Exclusions
+
+**Excluded from the P0 minimum loop:**
+
+- Full P2 backlog (21 items)
+- Multi-runner orchestration
+- External tool integrations
+- Chat/AI ingestion
+- Runner self-approval
+- Downstream repo implementation
+
+These are deferred to later stages. The P0 loop is the narrowest possible path that demonstrates end-to-end GitHub-first task lifecycle with evidence and review gates.
