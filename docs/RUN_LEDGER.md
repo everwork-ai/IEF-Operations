@@ -412,3 +412,151 @@ The compensating or correction event must include a reference to the original ev
 | [IEF-Governance#2](https://github.com/everwork-ai/IEF-Governance/issues/2) | Contract-Critical profile definition |
 | [IEF-Protocol#2](https://github.com/everwork-ai/IEF-Protocol/issues/2) | RunEvent, ArtifactRef, ContextRef schema definitions |
 | [IEF-Protocol#3](https://github.com/everwork-ai/IEF-Protocol/pull/3) | Merged Protocol v0.1.0 baseline |
+
+
+---
+
+## 8. Stage D P0: Minimum Ledger Path (GitHub-First Closed Loop)
+
+> Source of truth: [everwork-ai/IEF-Operations#4 comment 4618600457](https://github.com/everwork-ai/IEF-Operations/issues/4#issuecomment-4618600457)
+> Boundary: Contract spec only. This section defines the minimum ledger and RunEvent path for the GitHub-first closed loop. It does not replace Sections 1-7 above; it complements them with a narrower P0 scope.
+
+### 8.1 Minimum Ledger Schema (Closed Loop)
+
+The Operations ledger is append-only. Each entry:
+
+```text
+LedgerEntry {
+  entry_id: <UUID>
+  envelope_id: <string>
+  entry_type: "envelope_intake" | "dispatched" | "run_started" | "run_completed" | "run_failed" | "run_stopped" | "run_blocked" | "run_cancelled" | "run_timed_out" | "review_requested" | "review_accepted" | "review_rejected" | "approval_requested" | "approved" | "denied" | "escalated" | "accepted" | "retried"
+  timestamp: <ISO-8601 UTC>
+  actor: <string | null>           // who triggered this entry
+  data: <JSON object>              // type-specific payload
+  evidence_refs: <ArtifactRef[]>   // linked evidence
+  seq: <monotonically increasing>  // per-envelope sequence number
+}
+```
+
+**Ledger rules:**
+
+- **Append only:** no updates, no deletions. Corrections are new entries referencing the original.
+- **Ordering:** entries are ordered by `timestamp` within each envelope; `seq` is the canonical order.
+- **Truth:** the ledger is the single source of truth for task state. No other system (Redis, WorkContext, status reports) defines task state.
+- **Compensation:** conflicting entries are resolved by appending a correction entry; the original is never removed.
+- **Cursor:** per-source-type cursor tracks last-seen dedupe_key to avoid re-ingestion.
+
+### 8.2 RunEvent Name Catalog (Minimum)
+
+Runners emit `RunEvent` objects. The minimum set for the closed loop:
+
+| RunEvent Name | When Emitted | Key Fields |
+|---|---|---|
+| `run_started` | Runner begins execution | `envelope_id`, `runner_id`, `tool_runner_type`, `started_at` |
+| `run_completed` | Runner finishes with exit 0 | `envelope_id`, `runner_id`, `exit_code`, `finished_at`, `artifact_refs[]` |
+| `run_failed` | Runner exits non-zero or errors | `envelope_id`, `runner_id`, `error_code`, `error_message`, `finished_at` |
+| `run_stopped` | Runner stops on operator signal | `envelope_id`, `runner_id`, `reason`, `stopped_at`, `partial_artifacts[]` |
+| `run_blocked` | Runner blocked by missing input/gate | `envelope_id`, `runner_id`, `reason_code`, `blocked_at` |
+| `run_cancelled` | Runner cancelled by operator | `envelope_id`, `runner_id`, `reason`, `cancelled_at` |
+| `run_timed_out` | Runner exceeds timeout | `envelope_id`, `runner_id`, `elapsed_ms`, `timeout_ms` |
+
+These names are the **minimum closed-loop set**. Section 4 above defines the broader recommended event catalog for production use.
+
+### 8.3 Evidence / ArtifactRef (Minimum)
+
+Evidence produced during the closed loop:
+
+```text
+ArtifactRef {
+  artifact_id: <UUID>
+  envelope_id: <string>
+  type: "run_output" | "review_evidence" | "error_report" | "stub_evidence" | "delivery_report"
+  name: <string>
+  content_type: <string>
+  content: <JSON | text | binary>
+  created_at: <ISO-8601 UTC>
+  created_by: <runner_id | reviewer_id | ops_id>
+}
+```
+
+**Rules:**
+
+- Every `run_completed` must reference at least one `artifact_refs[]`.
+- Every `review_accepted` must reference `review_evidence` ArtifactRef.
+- Stub runners may emit `stub_evidence` (deterministic, no external execution).
+- Evidence is immutable once written; corrections produce new ArtifactRefs.
+
+### 8.4 Review Gate
+
+The review gate sits between `completed` and `accepted`:
+
+```text
+ReviewGate {
+  gate_id: <UUID>
+  envelope_id: <string>
+  status: "pending" | "accepted" | "rejected" | "rework_requested"
+  reviewer: <string | null>          // human or automated reviewer identity
+  review_requested_at: <ISO-8601 UTC>
+  review_decided_at: <ISO-8601 UTC | null>
+  review_artifacts: <ArtifactRef[]>
+  decision_evidence: <ArtifactRef | null>
+}
+```
+
+**Rules:**
+
+- Review gate is triggered automatically when runner emits `run_completed`.
+- Review gate status `pending` -> task enters `waiting_approval` lifecycle state.
+- Review gate status `accepted` -> task transitions to `accepted`.
+- Review gate status `rejected` -> task transitions to `failed` (with `review_rejected` ledger entry).
+- Review gate status `rework_requested` -> task transitions back to `dispatched` for retry.
+- **Review gate is external to the runner.** A runner cannot review its own output.
+- For the P0 minimum loop, the review gate may be a manual GitHub comment (human reviewer) or an automated deterministic check.
+
+### 8.5 Ledger Entry Type Mapping (Closed Loop)
+
+| Lifecycle moment | Ledger entry_type | Corresponding RunEvent |
+|---|---|---|
+| TaskEnvelope received and validated | `envelope_intake` | -- |
+| Operations dispatches to runner | `dispatched` | -- |
+| Runner begins execution | `run_started` | `run_started` |
+| Runner finishes successfully | `run_completed` | `run_completed` |
+| Runner fails | `run_failed` | `run_failed` |
+| Runner stopped by operator | `run_stopped` | `run_stopped` |
+| Runner blocked | `run_blocked` | `run_blocked` |
+| Runner cancelled | `run_cancelled` | `run_cancelled` |
+| Runner timed out | `run_timed_out` | `run_timed_out` |
+| Review gate triggered | `review_requested` | -- |
+| Review gate accepts | `review_accepted` | -- |
+| Review gate rejects | `review_rejected` | -- |
+| Approval requested | `approval_requested` | -- |
+| Approval granted | `approved` | -- |
+| Approval denied | `denied` | -- |
+| Task accepted (terminal) | `accepted` | -- |
+| Task escalated | `escalated` | -- |
+| Task retried | `retried` | -- |
+
+### 8.6 Relationship to Full Ledger (Sections 1-7)
+
+The P0 minimum ledger path is a **subset** of the full ledger defined in Sections 1-7:
+
+| P0 Entry Type | Full Ledger Equivalent |
+|---|---|
+| `envelope_intake` | `task_created` + `task_assigned` (task-level pre-run events) |
+| `dispatched` | `task_assigned` |
+| `run_started` | `run_started` |
+| `run_completed` | `run_completed` |
+| `run_failed` | `run_failed` |
+| `run_stopped` | (new -- no equivalent in v0; runner-level stop signal) |
+| `run_blocked` | `task_blocked` (task-level) |
+| `run_cancelled` | `run_cancelled` |
+| `run_timed_out` | (new -- timeout-specific variant) |
+| `review_accepted` | `review_completed` with decision: approved |
+| `review_rejected` | `review_completed` with decision: rejected |
+| `approved` | `approval_received` with decision: approved |
+| `denied` | `approval_received` with decision: denied |
+| `accepted` | `task_completed` |
+| `escalated` | `task_escalated` |
+| `retried` | `task_resumed` |
+
+The P0 minimum is used for the GitHub-first closed loop demonstration. The full ledger semantics (Sections 1-7) remain the normative definition for production use.
