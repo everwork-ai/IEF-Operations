@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ief.dev/schemas/task.schema.json",
+  "title": "IEF Task",
+  "description": "Task lifecycle and state management for IEF Operations. Represents a bounded unit of work managed through the Operations layer.",
+  "type": "object",
+  "required": ["task_id", "title", "status", "created_at", "updated_at"],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the task"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable task title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed task description"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "ready",
+        "assigned",
+        "running",
+        "waiting_input",
+        "waiting_approval",
+        "blocked",
+        "resumed",
+        "review_pending",
+        "completed",
+        "failed",
+        "cancelled",
+        "escalated"
+      ],
+      "description": "Current task state in the lifecycle"
+    },
+    "status_category": {
+      "type": "string",
+      "enum": ["initial", "pre_execution", "active_execution", "suspended", "review", "terminal"],
+      "description": "Category grouping for the current status"
+    },
+    "governance_profile": {
+      "type": "string",
+      "description": "Governance profile constraining this task (e.g., Contract-Critical, Implementation-Controlled, Standard, Lightweight)"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "default": "medium",
+      "description": "Task execution priority"
+    },
+    "task_type": {
+      "type": "string",
+      "description": "Type of task (e.g., implementation, documentation, review, research)"
+    },
+    "source": {
+      "type": "string",
+      "description": "Origin of the task (e.g., Program directive, adapter ingestion, human request)"
+    },
+    "owner": {
+      "type": "string",
+      "description": "Current task owner (runner or agent identity)"
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Assigned runner or agent identity"
+    },
+    "requester": {
+      "type": "string",
+      "description": "Identity of the entity that requested the task"
+    },
+    "acceptance_criteria": {
+      "type": "string",
+      "description": "Definition of done / acceptance criteria"
+    },
+    "scope": {
+      "type": "string",
+      "description": "Task scope definition"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "Task IDs this task depends on"
+    },
+    "current_run_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the currently active run"
+    },
+    "run_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of runs attempted for this task"
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "description": "References to artifacts produced by this task"
+    },
+    "context_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "description": "References to context attached to this task"
+    },
+    "transition_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "timestamp", "event_id"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Previous status"
+          },
+          "to": {
+            "type": "string",
+            "description": "New status"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the transition occurred"
+          },
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Ledger event ID for this transition"
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Evidence or reason for the transition"
+          }
+        }
+      },
+      "description": "History of status transitions"
+    },
+    "blocked_reason": {
+      "type": "string",
+      "description": "Reason for blocked/waiting state (when applicable)"
+    },
+    "blocked_since": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the task entered a blocked state"
+    },
+    "escalation_reason": {
+      "type": "string",
+      "description": "Reason for escalation (when status is escalated)"
+    },
+    "failure_reason": {
+      "type": "string",
+      "description": "Reason for failure (when status is failed)"
+    },
+    "completion_summary": {
+      "type": "string",
+      "description": "Summary of completion (when status is completed)"
+    },
+    "workflow_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the workflow this task belongs to (if any)"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata for the task",
+      "additionalProperties": true
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the task was created"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the task was last updated"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the task first entered running state"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the task reached a terminal state"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": ["blocked", "waiting_input", "waiting_approval", "escalated"]
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "required": ["blocked_reason"]
+          },
+          {
+            "required": ["escalation_reason"]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "required": ["failure_reason"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "required": ["completion_summary"]
+      }
+    }
+  ]
+}

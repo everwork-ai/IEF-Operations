@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ief.dev/schemas/run.schema.json",
+  "title": "IEF Run",
+  "description": "A single execution attempt of a task. Each run has its own lifecycle and event sequence in the run ledger.",
+  "type": "object",
+  "required": ["run_id", "task_id", "status", "started_at", "sequence_counter"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this run"
+    },
+    "task_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The task this run belongs to"
+    },
+    "parent_run_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Previous run ID if this is a resumed/retried run"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "prepared",
+        "started",
+        "in_progress",
+        "checkpointed",
+        "resumed",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "description": "Current run state"
+    },
+    "runner_id": {
+      "type": "string",
+      "description": "Identity of the runner executing this run"
+    },
+    "runner_type": {
+      "type": "string",
+      "description": "Type of runner (e.g., deterministic_stub, claude_code, codex, qoder, openclaw)"
+    },
+    "sequence_counter": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Current sequence number in the run ledger. Next event will use this value."
+    },
+    "ledger_event_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "Ordered list of event IDs in this run's ledger"
+    },
+    "context_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "description": "Context references attached at run preparation"
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "description": "Artifacts produced during this run"
+    },
+    "checkpoint_id": {
+      "type": ["string", "null"],
+      "description": "Latest checkpoint ID (if status is checkpointed)"
+    },
+    "error_details": {
+      "type": ["object", "null"],
+      "properties": {
+        "error_code": {
+          "type": "string"
+        },
+        "error_message": {
+          "type": "string"
+        },
+        "error_type": {
+          "type": "string"
+        }
+      },
+      "description": "Error information when status is failed"
+    },
+    "cancellation_reason": {
+      "type": ["string", "null"],
+      "description": "Reason for cancellation"
+    },
+    "cancelled_by": {
+      "type": ["string", "null"],
+      "description": "Identity that cancelled the run"
+    },
+    "summary": {
+      "type": ["string", "null"],
+      "description": "Completion summary when status is completed"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the run entered started state"
+    },
+    "completed_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When the run reached a terminal state"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional run metadata",
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "failed" } }
+      },
+      "then": {
+        "required": ["error_details"],
+        "properties": {
+          "error_details": { "type": "object" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "cancelled" } }
+      },
+      "then": {
+        "required": ["cancellation_reason"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "completed" } }
+      },
+      "then": {
+        "required": ["summary", "completed_at"]
+      }
+    }
+  ]
+}
