@@ -1,0 +1,96 @@
+openapi: 3.1.0
+info:
+  title: IEF Verification Module Specification
+  version: 0.1.0
+  description: >
+    Machine-readable contract for the IEF Verification Module.
+    Defines verification request, result, evidence, and ledger event schemas.
+    This spec is planning-only; no HTTP endpoints are implemented.
+    Verification operates within the Operations lifecycle (review_pending state),
+    not as a standalone HTTP service.
+  license:
+    name: MIT
+
+paths: {}  # No HTTP endpoints; verification is embedded in Operations lifecycle
+
+components:
+  schemas:
+    VerificationRequest:
+      $ref: '../schemas/verification_request.schema.json'
+    VerificationResult:
+      $ref: '../schemas/verification_result.schema.json'
+    VerificationEvidence:
+      $ref: '../schemas/verification_evidence.schema.json'
+    LedgerEntry:
+      $ref: '../schemas/ledger_entry.schema.json'
+    VerificationDimensionResult:
+      type: object
+      description: A single dimension's verification result with result/severity constraint.
+      required: [dimension, result, severity]
+      properties:
+        dimension:
+          type: string
+          enum: [functional, governance_compliance, boundary, stress]
+        result:
+          type: string
+          enum: [pass, fail, conditional, skipped]
+        evidence_refs:
+          type: array
+          items:
+            type: string
+            format: uri
+        findings:
+          type: array
+          items:
+            type: string
+        severity:
+          type: string
+          enum: [info, warning, error, critical]
+      allOf:
+        - if:
+            properties: { result: { const: pass } }
+          then:
+            properties: { severity: { const: info } }
+        - if:
+            properties: { result: { const: fail } }
+          then:
+            properties: { severity: { enum: [error, critical] } }
+        - if:
+            properties: { result: { const: conditional } }
+          then:
+            properties: { severity: { const: warning } }
+        - if:
+            properties: { result: { const: skipped } }
+          then:
+            properties: { severity: { const: info } }
+    VerificationLedgerEvent:
+      description: >
+        A ledger entry for verification lifecycle events.
+        Extends the base LedgerEntry with 4 verification event types:
+        verification_requested, verification_started, verification_completed, verification_failed.
+      allOf:
+        - $ref: '../schemas/ledger_entry.schema.json'
+
+  # A2A-compatible Agent Card (informational)
+  x-a2a-agent-card:
+    name: IEF Verification Module
+    description: Independent validation authority for produced digital employees
+    version: 0.1.0
+    capabilities:
+      streaming: false
+      pushNotifications: false
+    skills:
+      - id: verification.functional
+        name: Functional Verification
+        description: Validate digital employee can receive, execute, and deliver work
+      - id: verification.governance_compliance
+        name: Governance Compliance Verification
+        description: Validate digital employee follows assigned governance profile
+      - id: verification.boundary
+        name: Boundary Verification
+        description: Validate digital employee stays within authorized scope
+      - id: verification.stress
+        name: Stress Verification
+        description: Validate digital employee behavior under pressure
+    inputModes: [application/json]
+    outputModes: [application/json]

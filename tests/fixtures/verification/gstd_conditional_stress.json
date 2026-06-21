@@ -1,0 +1,46 @@
+{
+  "request": {
+    "verification_id": "44444444-4444-4444-4444-444444444444",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    "governance_profile": "G-Std",
+    "artifact_refs": ["https://github.com/everwork-ai/IEF-Program/blob/main/docs/IMPLEMENTATION.md"],
+    "allowed_files": ["docs/IMPLEMENTATION.md"],
+    "forbidden_actions": ["merge", "close"],
+    "review_result": {
+      "decision": "approved",
+      "reviewer": "ief-reviewer",
+      "review_timestamp": "2026-06-21T22:00:00+08:00"
+    },
+    "ledger_entries": [],
+    "requested_dimensions": ["functional", "governance_compliance", "boundary", "stress"],
+    "retry_count": 0
+  },
+  "expected_result": {
+    "verification_id": "44444444-4444-4444-4444-444444444444",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    "verification_timestamp": "2026-06-21T23:03:00+08:00",
+    "verifier": "ief-verifier-fixture",
+    "governance_profile": "G-Std",
+    "dimensions_verified": [
+      { "dimension": "functional", "result": "pass", "severity": "info" },
+      { "dimension": "governance_compliance", "result": "pass", "severity": "info" },
+      { "dimension": "boundary", "result": "pass", "severity": "info" },
+      {
+        "dimension": "stress",
+        "result": "conditional",
+        "severity": "warning",
+        "findings": ["Token budget was not constrained; stress not fully exercised"]
+      }
+    ],
+    "overall_result": "conditional",
+    "overall_severity": "warning",
+    "retry_eligible": true,
+    "retry_count": 0,
+    "closure_criteria_met": false,
+    "parent_artifact": "https://github.com/everwork-ai/IEF-Program/pull/13"
+  },
+  "test_id": "T4",
+  "description": "G-Std conditional: stress dimension not fully exercised, retry eligible"
+}

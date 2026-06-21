@@ -1,0 +1,41 @@
+{
+  "request": {
+    "verification_id": "33333333-3333-3333-3333-333333333333",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+    "governance_profile": "G-Std",
+    "artifact_refs": ["https://github.com/everwork-ai/IEF-Program/blob/main/docs/IMPLEMENTATION.md"],
+    "allowed_files": ["docs/IMPLEMENTATION.md", "src/worker.py"],
+    "forbidden_actions": ["merge", "close", "rebase"],
+    "review_result": {
+      "decision": "approved",
+      "reviewer": "ief-reviewer",
+      "review_timestamp": "2026-06-21T22:00:00+08:00"
+    },
+    "ledger_entries": [],
+    "requested_dimensions": ["functional", "governance_compliance", "boundary", "stress"],
+    "retry_count": 0
+  },
+  "expected_result": {
+    "verification_id": "33333333-3333-3333-3333-333333333333",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+    "verification_timestamp": "2026-06-21T23:02:00+08:00",
+    "verifier": "ief-verifier-fixture",
+    "governance_profile": "G-Std",
+    "dimensions_verified": [
+      { "dimension": "functional", "result": "pass", "severity": "info" },
+      { "dimension": "governance_compliance", "result": "pass", "severity": "info" },
+      { "dimension": "boundary", "result": "pass", "severity": "info" },
+      { "dimension": "stress", "result": "pass", "severity": "info" }
+    ],
+    "overall_result": "pass",
+    "overall_severity": "info",
+    "retry_eligible": false,
+    "retry_count": 0,
+    "closure_criteria_met": true,
+    "parent_artifact": "https://github.com/everwork-ai/IEF-Program/pull/13"
+  },
+  "test_id": "T3",
+  "description": "G-Std full 4-dimension pass: review approved, all gates passed"
+}

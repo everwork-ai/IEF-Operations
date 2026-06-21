@@ -1,0 +1,47 @@
+{
+  "request": {
+    "verification_id": "11111111-1111-1111-1111-111111111111",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "governance_profile": "G-Lite",
+    "artifact_refs": ["https://github.com/everwork-ai/IEF-Program/blob/main/docs/SMOKE_TEST.md"],
+    "allowed_files": ["docs/SMOKE_TEST.md"],
+    "forbidden_actions": ["merge", "close", "rebase"],
+    "requested_dimensions": ["functional", "boundary"],
+    "retry_count": 0
+  },
+  "expected_result": {
+    "verification_id": "11111111-1111-1111-1111-111111111111",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "verification_timestamp": "2026-06-21T23:00:00+08:00",
+    "verifier": "ief-verifier-fixture",
+    "governance_profile": "G-Lite",
+    "dimensions_verified": [
+      {
+        "dimension": "functional",
+        "result": "pass",
+        "severity": "info",
+        "criteria_checked": [
+          { "criterion": "F-3: Artifacts produced", "result": "pass", "evidence": "artifact_refs non-empty" }
+        ]
+      },
+      {
+        "dimension": "boundary",
+        "result": "pass",
+        "severity": "info",
+        "criteria_checked": [
+          { "criterion": "B-1: Allowed files only", "result": "pass", "evidence": "git diff subset of allowed_files" }
+        ]
+      }
+    ],
+    "overall_result": "pass",
+    "overall_severity": "info",
+    "retry_eligible": false,
+    "retry_count": 0,
+    "closure_criteria_met": true,
+    "parent_artifact": "https://github.com/everwork-ai/IEF-Program/pull/13"
+  },
+  "test_id": "T1",
+  "description": "G-Lite happy path: documentation task, all artifacts present, no boundary violations"
+}

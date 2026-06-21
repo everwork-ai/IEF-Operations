@@ -54,7 +54,11 @@
         "approval_received",
         "review_requested",
         "review_completed",
-        "ledger_correction"
+        "ledger_correction",
+        "verification_requested",
+        "verification_started",
+        "verification_completed",
+        "verification_failed"
       ]
     },
     "sequence": {
@@ -223,6 +227,98 @@
             "properties": {
               "from_state": { "type": "string" },
               "resolution": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "verification_requested" } }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["verification_id", "governance_profile", "requested_dimensions"],
+            "properties": {
+              "verification_id": { "type": "string", "format": "uuid" },
+              "governance_profile": { "type": "string", "enum": ["G-Lite", "G-Std", "G-Full"] },
+              "requested_dimensions": {
+                "type": "array",
+                "items": { "type": "string", "enum": ["functional", "governance_compliance", "boundary", "stress"] }
+              },
+              "triggered_by": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "verification_started" } }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["verification_id", "verifier"],
+            "properties": {
+              "verification_id": { "type": "string", "format": "uuid" },
+              "verifier": { "type": "string" },
+              "started_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "verification_completed" } }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["verification_id", "overall_result", "dimensions_verified"],
+            "properties": {
+              "verification_id": { "type": "string", "format": "uuid" },
+              "overall_result": { "type": "string", "enum": ["pass", "fail", "conditional", "blocked"] },
+              "overall_severity": { "type": "string", "enum": ["info", "warning", "error", "critical"] },
+              "dimensions_verified": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["dimension", "result"],
+                  "properties": {
+                    "dimension": { "type": "string" },
+                    "result": { "type": "string" },
+                    "severity": { "type": "string" },
+                    "findings": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              },
+              "retry_eligible": { "type": "boolean" },
+              "closure_criteria_met": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "verification_failed" } }
+      },
+      "then": {
+        "properties": {
+          "severity": { "enum": ["error", "critical"] },
+          "payload": {
+            "type": "object",
+            "required": ["verification_id", "failure_reason"],
+            "properties": {
+              "verification_id": { "type": "string", "format": "uuid" },
+              "failure_reason": { "type": "string" },
+              "retry_eligible": { "type": "boolean" }
             }
           }
         }

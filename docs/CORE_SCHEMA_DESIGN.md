@@ -354,6 +354,147 @@ Operations-specific governance (review gates, approval requirements) is encoded 
 
 ---
 
+## 11. Verification Schema Extension (Stage G G7-A)
+
+> Added: 2026-06-21  
+> Authorization: Controller STAGE_G_G6_FINAL_REVIEW_RESULT (G7 UNBLOCKED)  
+> Implementation: STAGE_G_G7A_VERIFICATION_MODULE_MINIMAL_IMPLEMENTATION
+
+### 11.1 Overview
+
+The verification module adds three new JSON Schema files to support independent validation of digital employee work:
+
+| Schema | File | Purpose |
+|--------|------|---------|
+| Verification Request | `schemas/verification_request.schema.json` | Input: evidence and context for verification |
+| Verification Result | `schemas/verification_result.schema.json` | Output: dimension-level results with result/severity constraints |
+| Verification Evidence | `schemas/verification_evidence.schema.json` | Structured evidence supporting dimension results |
+
+### 11.2 Verification Lifecycle Events
+
+The `ledger_entry.schema.json` was extended with 4 new event types:
+
+| Event Type | Category | When Emitted |
+|------------|----------|--------------|
+| `verification_requested` | Governance | Task enters `review_pending` and verification is required |
+| `verification_started` | Execution | Verification process begins |
+| `verification_completed` | Governance | Verification finishes with any result |
+| `verification_failed` | Governance | Verification cannot complete (infra failure, timeout) |
+
+**Total event types:** 22 (original) + 4 (verification) = **26 event types**
+
+### 11.3 Result/Severity Constraint
+
+The `verification_result.schema.json` enforces strict result/severity cross-field constraints to maintain logical consistency:
+
+**Dimension-level constraints:**
+- `result == "pass"` → `severity` MUST be `"info"`
+- `result == "fail"` → `severity` MUST be `"error"` or `"critical"`
+- `result == "conditional"` → `severity` MUST be `"warning"`
+- `result == "skipped"` → `severity` MUST be `"info"`
+
+**Overall-level constraints:**
+- `overall_result == "pass"` → `overall_severity` MUST be `"info"`
+- `overall_result == "fail"` → `overall_severity` MUST be `"error"` or `"critical"`
+- `overall_result == "conditional"` → `overall_severity` MUST be `"warning"`
+- `overall_severity == "critical"` → `retry_eligible` MUST be `false`
+
+These constraints are enforced via `allOf` conditional blocks in JSON Schema draft 2020-12.
+
+**Source:** G6-A Schema Fix (IEF-Program#11 comment 4753183384)
+
+### 11.4 Integration with Existing Schemas
+
+```
+┌─────────────┐     1:N     ┌──────────┐
+│   Workflow  │────────────▶│   Task   │
+└─────────────┘             └────┬─────┘
+                                 │ 1:N
+                                 ▼
+                            ┌──────────┐
+                            │   Run    │
+                            └────┬─────┘
+                                 │ 1:N
+                                 ▼
+                         ┌───────────────┐
+                         │  Ledger Entry │ (extended with verification events)
+                         └───────┬───────┘
+                                 │ 1:N (verification_requested/started/completed/failed)
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  Verification Request   │ (new)
+                    └────────────┬────────────┘
+                                 │ 1:1
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  Verification Result    │ (new, with result/severity constraints)
+                    └────────────┬────────────┘
+                                 │ 1:N
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  Verification Evidence  │ (new)
+                    └─────────────────────────┘
+```
+
+### 11.5 Verification Dimensions
+
+The verification module evaluates work across 4 dimensions:
+
+| Dimension | Purpose | Evidence Consumed |
+|-----------|---------|-------------------|
+| `functional` | Validate digital employee can receive, execute, and deliver work | `artifact_refs`, `ledger_entries` (artifact_produced, run_completed) |
+| `governance_compliance` | Validate digital employee follows assigned governance profile | `ledger_entries` (review_completed, approval_received), `review_result` |
+| `boundary` | Validate digital employee stays within authorized scope | `allowed_files`, `forbidden_actions`, `artifact_refs` (git diff) |
+| `stress` | Validate digital employee behavior under pressure | `ledger_entries` (task_blocked, task_failed, task_escalated) |
+
+### 11.6 Governance Profile Requirements
+
+| Profile | Minimum Evidence Required |
+|---------|---------------------------|
+| G-Lite | `artifact_refs` non-empty, `allowed_files` non-empty, `forbidden_actions` non-empty |
+| G-Std | G-Lite + `review_result` present with `decision`, `ledger_entries` non-empty |
+| G-Full | G-Std + `ledger_entries` contains events for all 7 gates (G1-G7), `context_refs` non-empty |
+
+### 11.7 Test Fixtures
+
+7 fixture tests validate the verification schemas:
+
+| Test ID | Fixture | Profile | Expected Result |
+|---------|---------|---------|-----------------|
+| T1 | `glite_pass.json` | G-Lite | pass (info) |
+| T2 | `glite_fail_boundary.json` | G-Lite | fail (critical) |
+| T3 | `gstd_pass.json` | G-Std | pass (info) |
+| T4 | `gstd_conditional_stress.json` | G-Std | conditional (warning) |
+| T5 | `gfull_fail_governance.json` | G-Full | fail (error) |
+| T6 | `blocked_missing_input.json` | G-Std | blocked (warning) |
+| T7 | `retry_eligible_timeout.json` | Any | verification_failed ledger event |
+
+**Fixture location:** `tests/fixtures/verification/`
+
+**Run tests:** `python scripts/verify.py --run-fixtures`
+
+### 11.8 Documentation
+
+| Document | Path | Purpose |
+|----------|------|---------|
+| Implementation Plan | `docs/VERIFICATION_IMPLEMENTATION_PLAN_V0.md` | Complete verification module design and implementation details |
+| Fixture Documentation | `docs/VERIFICATION_FIXTURES.md` | Test fixture descriptions and expected outcomes |
+| OpenAPI Spec | `docs/VERIFICATION_SPEC_V0.yaml` | Machine-readable discovery spec (OpenAPI 3.1) |
+
+### 11.9 Non-Goals
+
+This verification extension is **minimal skeleton only**:
+- No production verifier daemon
+- No CI enforcement
+- No automatic GitHub comments
+- No issue closure or PR merge
+- No stage promotion
+- No runtime deployment
+
+For full details, see `VERIFICATION_IMPLEMENTATION_PLAN_V0.md`.
+
+---
+
 ## 10. Non-Goals
 
 - This document does **not** redefine Protocol schemas (TaskEnvelope, RunEvent, ArtifactRef, ContextRef).
