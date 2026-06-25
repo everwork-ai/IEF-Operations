@@ -1,0 +1,421 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ief.dev/schemas/RESULT_SCHEMA_V2.json",
+  "title": "IEF Verification Result V2",
+  "description": "Hardened output of the verification module (Stage G G8-2). Extends V1 with: input fingerprint for deterministic replay, failure classification, coverage bucket tracking, criteria version pinning, normalization rules, and versioned schema evolution. All result/severity constraints from G6-A schema fix are preserved and tightened.",
+  "type": "object",
+  "required": [
+    "verification_id",
+    "task_id",
+    "run_id",
+    "verification_timestamp",
+    "verifier",
+    "governance_profile",
+    "dimensions_verified",
+    "overall_result",
+    "overall_severity",
+    "retry_eligible",
+    "retry_count",
+    "closure_criteria_met",
+    "parent_artifact",
+    "schema_version",
+    "input_fingerprint",
+    "evaluation_criteria_version",
+    "coverage_bucket",
+    "failure_classification",
+    "applicable_failure_categories"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "verification_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this verification result."
+    },
+    "task_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The task being verified."
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The run being verified."
+    },
+    "verification_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of when evaluation was performed."
+    },
+    "verifier": {
+      "type": "string",
+      "description": "Identity of the verification agent or module."
+    },
+    "governance_profile": {
+      "type": "string",
+      "enum": ["G-Lite", "G-Std", "G-Full"],
+      "description": "Governance profile determining evidence requirements and dimension strictness."
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "Exact schema $id used for evaluation, enabling version-pinned replay.",
+      "examples": ["https://ief.dev/schemas/RESULT_SCHEMA_V2.json"]
+    },
+    "input_fingerprint": {
+      "type": "string",
+      "description": "SHA-256 hash of the canonical JSON serialization of deterministic input fields. Used for replay verification and tamper detection.",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "evaluation_criteria_version": {
+      "type": "string",
+      "description": "Version identifier of the criteria catalog used for evaluation. Format: <governance_profile>-<date>-<revision>.",
+      "pattern": "^G-(Lite|Std|Full)-\\d{4}-\\d{2}-\\d{2}-r\\d+$"
+    },
+    "coverage_bucket": {
+      "type": "string",
+      "enum": [
+        "CB-1_STANDARD",
+        "CB-2_MINIMAL_EVIDENCE",
+        "CB-3_EVIDENCE_GAP",
+        "CB-4_EMPTY_DIMENSIONS",
+        "CB-5_ALL_SKIPPED",
+        "CB-6_DUPLICATE_ID",
+        "CB-7_SCHEMA_INVALID",
+        "CB-8_GOVERNANCE_MISMATCH",
+        "CB-9_CONTRADICTORY_EVIDENCE",
+        "CB-10_STALE_TIMESTAMP"
+      ],
+      "description": "Input-domain coverage bucket from VERIFICATION_HARDENING_SPEC §2.1. Exactly one bucket per result."
+    },
+    "failure_classification": {
+      "type": ["string", "null"],
+      "enum": [
+        "FC-SCHEMA",
+        "FC-EVIDENCE",
+        "FC-BOUNDARY",
+        "FC-GOVERNANCE",
+        "FC-FUNCTIONAL",
+        "FC-STRESS",
+        "FC-INFRA",
+        "FC-DEDUP",
+        "FC-CONTRADICT",
+        "FC-STALE",
+        null
+      ],
+      "description": "Primary failure category from VERIFICATION_HARDENING_SPEC §4.1. Null when overall_result is pass."
+    },
+    "applicable_failure_categories": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "FC-SCHEMA",
+          "FC-EVIDENCE",
+          "FC-BOUNDARY",
+          "FC-GOVERNANCE",
+          "FC-FUNCTIONAL",
+          "FC-STRESS",
+          "FC-INFRA",
+          "FC-DEDUP",
+          "FC-CONTRADICT",
+          "FC-STALE"
+        ]
+      },
+      "uniqueItems": true,
+      "description": "All failure categories that apply to this result. Empty when overall_result is pass."
+    },
+    "dimensions_verified": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Per-dimension verification results. May be empty for blocked/skipped verifications.",
+      "items": {
+        "type": "object",
+        "required": ["dimension", "result", "severity"],
+        "additionalProperties": false,
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "enum": ["functional", "governance_compliance", "boundary", "stress"]
+          },
+          "result": {
+            "type": "string",
+            "enum": ["pass", "fail", "conditional", "skipped"]
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["info", "warning", "error", "critical"]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": { "type": "string", "format": "uri" },
+            "description": "URIs of evidence artifacts supporting this dimension's result."
+          },
+          "findings": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Human-readable findings. Must not be suppressed or filtered."
+          },
+          "edge_cases_triggered": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Edge case identifiers from VERIFICATION_HARDENING_SPEC §2.2 that were triggered during evaluation of this dimension."
+          },
+          "criteria_checked": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["criterion_id", "criterion", "result"],
+              "additionalProperties": false,
+              "properties": {
+                "criterion_id": {
+                  "type": "string",
+                  "description": "Stable identifier for the criterion (e.g., F-1, GC-3, B-1, S-2)."
+                },
+                "criterion": {
+                  "type": "string",
+                  "description": "Human-readable criterion text."
+                },
+                "result": {
+                  "type": "string",
+                  "enum": ["pass", "fail", "conditional", "skipped"]
+                },
+                "evidence": {
+                  "type": ["string", "null"],
+                  "description": "Evidence supporting this criterion's result."
+                }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "result": { "const": "pass" } },
+              "required": ["result"]
+            },
+            "then": {
+              "properties": { "severity": { "const": "info" } }
+            }
+          },
+          {
+            "if": {
+              "properties": { "result": { "const": "fail" } },
+              "required": ["result"]
+            },
+            "then": {
+              "properties": { "severity": { "enum": ["error", "critical"] } }
+            }
+          },
+          {
+            "if": {
+              "properties": { "result": { "const": "conditional" } },
+              "required": ["result"]
+            },
+            "then": {
+              "properties": { "severity": { "const": "warning" } }
+            }
+          },
+          {
+            "if": {
+              "properties": { "result": { "const": "skipped" } },
+              "required": ["result"]
+            },
+            "then": {
+              "properties": { "severity": { "const": "info" } }
+            }
+          }
+        ]
+      }
+    },
+    "overall_result": {
+      "type": "string",
+      "enum": ["pass", "fail", "conditional", "blocked"],
+      "description": "Aggregated verification result across all dimensions."
+    },
+    "overall_severity": {
+      "type": "string",
+      "enum": ["info", "warning", "error", "critical"],
+      "description": "Aggregated severity across all dimensions."
+    },
+    "retry_eligible": {
+      "type": "boolean",
+      "description": "Whether Controller MAY authorize a retry. This is a flag, not an authorization. Controller decides."
+    },
+    "retry_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of previous verification attempts for this run."
+    },
+    "closure_criteria_met": {
+      "type": "boolean",
+      "description": "Whether the verification result satisfies closure criteria for the governance profile. This is a flag; Controller decides closure."
+    },
+    "decision_by": {
+      "type": ["string", "null"],
+      "description": "Controller identity when result has been acknowledged. Null until acknowledged."
+    },
+    "decided_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Timestamp of Controller acknowledgment."
+    },
+    "parent_artifact": {
+      "type": "string",
+      "format": "uri",
+      "description": "Link to the review result, test result, or prior verification result that triggered this verification."
+    },
+    "supersedes": {
+      "type": ["string", "null"],
+      "description": "Verification ID of a prior result that this result supersedes (e.g., after schema migration re-evaluation). Null if this is the first evaluation."
+    },
+    "blocked_reason": {
+      "type": ["string", "null"],
+      "description": "Reason when overall_result is blocked. Required when overall_result is blocked."
+    },
+    "normalization_applied": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule_id", "field", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "description": "Normalization rule identifier (e.g., NORM-1, NORM-2)."
+          },
+          "field": {
+            "type": "string",
+            "description": "JSON path of the field that was normalized."
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of what was normalized."
+          },
+          "original_value": {
+            "type": ["string", "null"],
+            "description": "Original value before normalization, if applicable."
+          }
+        }
+      },
+      "description": "List of normalization rules applied to the input before evaluation. Enables replay transparency."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Non-normative metadata. May include environment info, evaluator notes, etc. Not part of deterministic result."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "overall_result": { "const": "blocked" } },
+        "required": ["overall_result"]
+      },
+      "then": {
+        "required": ["blocked_reason"],
+        "properties": {
+          "blocked_reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "overall_result": { "const": "pass" } },
+        "required": ["overall_result"]
+      },
+      "then": {
+        "properties": {
+          "overall_severity": { "const": "info" },
+          "failure_classification": { "const": null },
+          "applicable_failure_categories": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "overall_result": { "const": "fail" } },
+        "required": ["overall_result"]
+      },
+      "then": {
+        "properties": {
+          "overall_severity": { "enum": ["error", "critical"] },
+          "failure_classification": {
+            "type": "string",
+            "enum": [
+              "FC-BOUNDARY",
+              "FC-GOVERNANCE",
+              "FC-FUNCTIONAL",
+              "FC-STRESS",
+              "FC-CONTRADICT"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "overall_result": { "const": "conditional" } },
+        "required": ["overall_result"]
+      },
+      "then": {
+        "properties": {
+          "overall_severity": { "const": "warning" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "overall_severity": { "const": "critical" } },
+        "required": ["overall_severity"]
+      },
+      "then": {
+        "properties": {
+          "retry_eligible": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "overall_result": { "const": "blocked" } },
+        "required": ["overall_result"]
+      },
+      "then": {
+        "properties": {
+          "failure_classification": {
+            "type": "string",
+            "enum": ["FC-SCHEMA", "FC-EVIDENCE", "FC-DEDUP"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "retry_count": { "minimum": 2 } },
+        "required": ["retry_count"]
+      },
+      "then": {
+        "if": {
+          "properties": { "overall_severity": { "enum": ["error"] } },
+          "required": ["overall_severity"]
+        },
+        "then": {
+          "properties": {
+            "retry_eligible": { "const": false }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "failure_classification": { "const": "FC-BOUNDARY" } },
+        "required": ["failure_classification"]
+      },
+      "then": {
+        "properties": {
+          "overall_severity": { "const": "critical" },
+          "retry_eligible": { "const": false }
+        }
+      }
+    }
+  ]
+}
