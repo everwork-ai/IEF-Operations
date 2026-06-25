@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ief.dev/schemas/IKE_READ_MODEL_VERSION_1.json",
+  "title": "IKE Read Model Version 1",
+  "description": "Versioned read model defining how the IKE / MyAttention external consumer reads IEF artifacts. Specifies artifact types, identity fields, freshness handling, provenance requirements, and forbidden fields. This model is the machine-readable contract companion to IKE_CONSUMER_STABILITY_SPEC.md. IKE implementations MUST conform to this model when reading IEF data.",
+  "type": "object",
+  "required": [
+    "read_model_version",
+    "consumer_identity",
+    "artifact_types",
+    "freshness_rules",
+    "provenance_requirements",
+    "forbidden_fields",
+    "forbidden_sources",
+    "stop_triggers",
+    "rollback_triggers",
+    "anti_integration_rules"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "read_model_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Version of this read model. Schema evolution requires explicit version bump."
+    },
+    "consumer_identity": {
+      "type": "object",
+      "required": ["name", "repo_path", "classification"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "IKE / MyAttention",
+          "description": "Consumer name."
+        },
+        "repo_path": {
+          "type": "string",
+          "description": "Local filesystem path to the IKE repository."
+        },
+        "classification": {
+          "type": "string",
+          "const": "external_read_only_consumer",
+          "description": "IKE is an external consumer with no write access to IEF."
+        },
+        "a2a_agent_card": {
+          "type": "object",
+          "description": "Optional A2A Agent Card projection for discovery. Read-only projection; not a contract replacement.",
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "skills": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "discovery_only": {
+              "type": "boolean",
+              "const": true,
+              "description": "A2A Agent Card is for discovery only. It carries no authority."
+            }
+          }
+        }
+      }
+    },
+    "artifact_types": {
+      "type": "array",
+      "description": "IEF artifact types that IKE is authorized to read.",
+      "minItems": 11,
+      "items": {
+        "type": "object",
+        "required": ["type_id", "display_name", "source_repo", "source_path", "identity_fields", "schema_ref", "freshness_threshold"],
+        "additionalProperties": false,
+        "properties": {
+          "type_id": {
+            "type": "string",
+            "enum": [
+              "governance_profiles",
+              "verification_result_v2",
+              "verification_evidence",
+              "ledger_entry_schema",
+              "ledger_entries",
+              "task_lifecycle",
+              "run_lifecycle",
+              "control_plane_freeze",
+              "mutation_matrix",
+              "contract_lock",
+              "verification_hardening_spec",
+              "failure_replay_model",
+              "protocol_schemas"
+            ],
+            "description": "Unique identifier for this artifact type."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Human-readable name."
+          },
+          "source_repo": {
+            "type": "string",
+            "description": "GitHub repository (owner/repo).",
+            "pattern": "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$"
+          },
+          "source_path": {
+            "type": "string",
+            "description": "Path within the repository."
+          },
+          "identity_fields": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Fields that uniquely identify an instance of this artifact type.",
+            "minItems": 1
+          },
+          "schema_ref": {
+            "type": ["string", "null"],
+            "description": "JSON Schema $id for validation. Null for markdown-only artifacts."
+          },
+          "freshness_threshold": {
+            "type": "object",
+            "required": ["unit", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "unit": {
+                "type": "string",
+                "enum": ["hours", "days", "until_amended", "until_version_bump"]
+              },
+              "value": {
+                "type": ["integer", "null"],
+                "minimum": 1,
+                "description": "Threshold value. Null for until_amended/until_version_bump."
+              }
+            }
+          },
+          "read_method": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["github_api", "local_clone", "artifact_uri"]
+            },
+            "description": "Authorized read methods."
+          },
+          "mapping_status": {
+            "type": "string",
+            "enum": ["mapped", "partial", "gap", "not_applicable"],
+            "description": "IKE mapping status per G7-B pilot findings."
+          },
+          "mapping_notes": {
+            "type": ["string", "null"],
+            "description": "Notes on mapping gaps or partial coverage."
+          }
+        }
+      }
+    },
+    "freshness_rules": {
+      "type": "object",
+      "required": ["rules"],
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule_id", "description", "action_on_violation"],
+            "additionalProperties": false,
+            "properties": {
+              "rule_id": {
+                "type": "string",
+                "enum": ["FR-1", "FR-2", "FR-3", "FR-4"]
+              },
+              "description": {
+                "type": "string"
+              },
+              "action_on_violation": {
+                "type": "string",
+                "description": "What IKE must do when this rule is violated."
+              }
+            }
+          },
+          "minItems": 4,
+          "maxItems": 4
+        }
+      }
+    },
+    "provenance_requirements": {
+      "type": "object",
+      "required": ["required_fields", "recording_rule"],
+      "additionalProperties": false,
+      "properties": {
+        "required_fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["field_name", "type", "description"],
+            "additionalProperties": false,
+            "properties": {
+              "field_name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["string", "integer", "string:date-time", "string:enum"]
+              },
+              "description": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "enum_values": {
+                "type": ["array", "null"],
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "recording_rule": {
+          "type": "string",
+          "description": "When provenance must be recorded."
+        }
+      }
+    },
+    "forbidden_fields": {
+      "type": "array",
+      "description": "Fields in IEF artifacts that IKE MUST NOT interpret as actionable directives or use for automated decision-making.",
+      "items": {
+        "type": "object",
+        "required": ["field_path", "artifact_type", "reason", "allowed_usage"],
+        "additionalProperties": false,
+        "properties": {
+          "field_path": {
+            "type": "string",
+            "description": "JSON path of the forbidden field within the artifact."
+          },
+          "artifact_type": {
+            "type": "string",
+            "description": "Which artifact type this restriction applies to."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why this field is forbidden for automated use."
+          },
+          "allowed_usage": {
+            "type": "string",
+            "enum": ["display_only", "log_only", "report_only", "not_permitted"],
+            "description": "What IKE may do with this field."
+          }
+        }
+      }
+    },
+    "forbidden_sources": {
+      "type": "array",
+      "description": "Data sources that IKE MUST NOT consume, per G7-B pilot truth hierarchy.",
+      "items": {
+        "type": "object",
+        "required": ["source_id", "description", "rationale"],
+        "additionalProperties": false,
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "enum": [
+              "raw_runner_cache",
+              "adapter_staging_area",
+              "chat_memory",
+              "unreviewed_knowledge_observations",
+              "private_conversations",
+              "non_main_branches"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          }
+        }
+      },
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "stop_triggers": {
+      "type": "array",
+      "description": "Conditions that require IKE to immediately stop consuming IEF data.",
+      "items": {
+        "type": "object",
+        "required": ["trigger_id", "condition", "action", "recovery"],
+        "additionalProperties": false,
+        "properties": {
+          "trigger_id": {
+            "type": "string",
+            "enum": ["ST-1", "ST-2", "ST-3", "ST-4", "ST-5", "ST-6"]
+          },
+          "condition": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "recovery": {
+            "type": "string",
+            "description": "How to recover after the stop condition is resolved."
+          }
+        }
+      },
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "rollback_triggers": {
+      "type": "array",
+      "description": "Conditions that require IKE to roll back cached IEF data.",
+      "items": {
+        "type": "object",
+        "required": ["trigger_id", "condition", "action"],
+        "additionalProperties": false,
+        "properties": {
+          "trigger_id": {
+            "type": "string",
+            "enum": ["RT-1", "RT-2", "RT-3", "RT-4", "RT-5"]
+          },
+          "condition": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          }
+        }
+      },
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "anti_integration_rules": {
+      "type": "object",
+      "required": ["write_back_prohibitions", "a2a_prohibitions"],
+      "additionalProperties": false,
+      "properties": {
+        "write_back_prohibitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule_id", "prohibition"],
+            "additionalProperties": false,
+            "properties": {
+              "rule_id": {
+                "type": "string",
+                "enum": ["AI-1", "AI-2", "AI-3", "AI-4", "AI-5", "AI-6", "AI-7", "AI-8"]
+              },
+              "prohibition": {
+                "type": "string"
+              }
+            }
+          },
+          "minItems": 8,
+          "maxItems": 8
+        },
+        "a2a_prohibitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["rule_id", "prohibition"],
+            "additionalProperties": false,
+            "properties": {
+              "rule_id": {
+                "type": "string",
+                "enum": ["AP-1", "AP-2", "AP-3", "AP-4"]
+              },
+              "prohibition": {
+                "type": "string"
+              }
+            }
+          },
+          "minItems": 4,
+          "maxItems": 4
+        }
+      }
+    }
+  }
+}

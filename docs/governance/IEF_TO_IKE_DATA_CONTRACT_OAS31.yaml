@@ -1,0 +1,791 @@
+openapi: 3.1.0
+info:
+  title: IEF → IKE Read-Only Data Contract
+  version: 1.0.0
+  description: >
+    OpenAPI 3.1 specification for the read-only data contract between the IEF
+    ecosystem and the IKE / MyAttention external consumer. This contract defines
+    how IKE reads IEF artifacts. There are NO write operations. IKE is a
+    read-only consumer of published IEF schemas and artifacts. All data flows
+    are unidirectional: IEF publishes, IKE reads.
+    
+    This contract does not define HTTP endpoints. IEF artifacts are accessed via:
+    - GitHub API (gh api repos/{owner}/{repo}/contents/{path})
+    - Local git clone (file system reads from cloned repositories)
+    - Artifact URI resolution (URI references within IEF artifacts)
+    
+    The "paths" section documents the logical read operations as if they were
+    API endpoints, for contract clarity. Actual access is via GitHub API or
+    local file system.
+  license:
+    name: MIT
+  contact:
+    name: IEF Program Controller
+    url: https://github.com/everwork-ai/IEF-Program/issues/11
+
+# No servers — this is a logical contract, not a hosted API
+servers: []
+
+# Tag definitions for organizing operations
+tags:
+  - name: governance
+    description: Read governance profiles, schemas, and contract locks
+  - name: verification
+    description: Read verification results (V2), evidence, and schemas
+  - name: lifecycle
+    description: Read task and run lifecycle definitions
+  - name: ledger
+    description: Read ledger entry schema and event types
+  - name: protocol
+    description: Read Protocol schemas (TaskEnvelope, RunEvent, ArtifactRef, ContextRef)
+  - name: control-plane
+    description: Read control plane freeze, mutation matrix, and hardening specs
+
+paths:
+  /governance/profiles:
+    get:
+      operationId: readGovernanceProfiles
+      summary: Read available governance profiles
+      description: >
+        Returns the governance profile definitions (G-Lite, G-Std, G-Full)
+        including evidence requirements, gate definitions, and dimension
+        strictness rules. IKE uses this to map IEF governance to IKE hard gates.
+      tags: [governance]
+      responses:
+        '200':
+          description: Governance profiles retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernanceProfileList'
+              example:
+                profiles:
+                  - name: G-Lite
+                    evidence_required: [artifact_refs, allowed_files, forbidden_actions]
+                    gates: [G1, G2, G3, G4, G5]
+                    dimensions: [functional, boundary]
+                  - name: G-Std
+                    evidence_required: [artifact_refs, allowed_files, forbidden_actions, review_result, ledger_entries]
+                    gates: [G1, G2, G3, G4, G5, G6, G7]
+                    dimensions: [functional, governance_compliance, boundary, stress]
+                  - name: G-Full
+                    evidence_required: [artifact_refs, allowed_files, forbidden_actions, review_result, ledger_entries, context_refs]
+                    gates: [G1, G2, G3, G4, G5, G6, G7]
+                    dimensions: [functional, governance_compliance, boundary, stress]
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: schemas/
+        freshness_threshold_days: 7
+        read_method: github_api | local_clone
+
+  /governance/contract-lock:
+    get:
+      operationId: readContractLock
+      summary: Read the Stage G contract lock
+      description: >
+        Returns the frozen control plane boundaries, mutation matrix, and
+        hard gates defined in G8-1. IKE uses this to understand which
+        IEF operations are allowed, denied, or gated.
+      tags: [governance, control-plane]
+      responses:
+        '200':
+          description: Contract lock retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractLock'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: schemas/STAGE_G_CONTRACT_LOCK.json
+        freshness_threshold: until_amended
+        read_method: github_api | local_clone
+
+  /verification/results/{verification_id}:
+    get:
+      operationId: readVerificationResult
+      summary: Read a specific verification result
+      description: >
+        Returns a VerificationResult V2 with full traceability fields:
+        input_fingerprint, schema_version, evaluation_criteria_version,
+        coverage_bucket, failure_classification, and normalization_applied.
+        IKE reads this to understand verification outcomes for tasks it
+        is tracking or aligned with.
+      tags: [verification]
+      parameters:
+        - name: verification_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The verification result UUID
+      responses:
+        '200':
+          description: Verification result retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResultV2'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: ledger or artifact store
+        freshness_threshold_hours: 24
+        read_method: github_api | artifact_uri
+
+  /verification/schema:
+    get:
+      operationId: readVerificationResultSchema
+      summary: Read the Verification Result V2 schema
+      description: >
+        Returns the RESULT_SCHEMA_V2.json definition. IKE uses this
+        to validate verification results it reads and to understand
+        the structure of verification output.
+      tags: [verification]
+      responses:
+        '200':
+          description: Schema retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: JSON Schema 2020-12 definition
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: schemas/RESULT_SCHEMA_V2.json
+        freshness_threshold: until_version_bump
+        read_method: github_api | local_clone
+
+  /verification/evidence/{evidence_id}:
+    get:
+      operationId: readVerificationEvidence
+      summary: Read verification evidence
+      description: >
+        Returns a VerificationEvidence object containing structured
+        evidence supporting a verification dimension result. IKE reads
+        this to understand what proof supports a verification finding.
+      tags: [verification]
+      parameters:
+        - name: evidence_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The evidence UUID
+      responses:
+        '200':
+          description: Evidence retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationEvidence'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: artifact URI
+        freshness_threshold_hours: 24
+        read_method: artifact_uri
+
+  /lifecycle/task:
+    get:
+      operationId: readTaskLifecycle
+      summary: Read task lifecycle definition
+      description: >
+        Returns the task lifecycle state machine (13 states, transition
+        rules, evidence requirements). IKE uses this to map IEF task
+        states to IKE pipeline states.
+      tags: [lifecycle]
+      responses:
+        '200':
+          description: Task lifecycle retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskLifecycle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: docs/TASK_LIFECYCLE.md
+        freshness_threshold_days: 30
+        read_method: github_api | local_clone
+
+  /lifecycle/run:
+    get:
+      operationId: readRunLifecycle
+      summary: Read run lifecycle definition
+      description: >
+        Returns the run lifecycle state machine (8 states, transition
+        rules). IKE uses this to understand IEF run execution flow.
+      tags: [lifecycle]
+      responses:
+        '200':
+          description: Run lifecycle retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunLifecycle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: docs/RUN_LEDGER.md
+        freshness_threshold_days: 30
+        read_method: github_api | local_clone
+
+  /ledger/schema:
+    get:
+      operationId: readLedgerSchema
+      summary: Read ledger entry schema
+      description: >
+        Returns the ledger entry schema including all 26 event types
+        (22 original + 4 verification). IKE uses this to understand
+        the event taxonomy and map to IKE progress_log.
+      tags: [ledger]
+      responses:
+        '200':
+          description: Ledger schema retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerEntrySchema'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: schemas/ledger_entry.schema.json
+        freshness_threshold_hours: 1
+        read_method: github_api | local_clone
+
+  /ledger/events/{task_id}:
+    get:
+      operationId: readLedgerEventsForTask
+      summary: Read ledger events for a specific task
+      description: >
+        Returns the ordered sequence of ledger entries for a given task.
+        IKE uses this to reconstruct task execution history and verify
+        gate adherence.
+      tags: [ledger]
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The task UUID
+      responses:
+        '200':
+          description: Ledger events retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LedgerEntry'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: ledger
+        freshness_threshold_hours: 1
+        read_method: github_api | artifact_uri
+
+  /protocol/schemas:
+    get:
+      operationId: readProtocolSchemas
+      summary: Read IEF Protocol schemas
+      description: >
+        Returns the Protocol schemas: TaskEnvelope, RunEvent, ArtifactRef,
+        ContextRef. IKE uses these to understand the data contracts for
+        task assignment, execution reporting, and artifact referencing.
+      tags: [protocol]
+      responses:
+        '200':
+          description: Protocol schemas retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProtocolSchemaBundle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Protocol
+        source_path: schemas/
+        freshness_threshold: until_version_bump
+        read_method: github_api | local_clone
+
+  /hardening/verification-spec:
+    get:
+      operationId: readVerificationHardeningSpec
+      summary: Read the verification hardening specification
+      description: >
+        Returns the G8-2 verification hardening spec with edge case coverage,
+        deterministic replay guarantees, and failure classification.
+        IKE reads this to understand verification robustness guarantees.
+      tags: [verification, control-plane]
+      responses:
+        '200':
+          description: Hardening spec retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Markdown document with structured specification
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: docs/governance/VERIFICATION_HARDENING_SPEC.md
+        freshness_threshold: until_amended
+        read_method: github_api | local_clone
+
+  /hardening/failure-replay-model:
+    get:
+      operationId: readFailureReplayModel
+      summary: Read the failure replay model
+      description: >
+        Returns the G8-2 failure replay model with traceability chains,
+        deterministic re-evaluation procedures, and input fingerprint spec.
+        IKE reads this to understand how verification failures are traced.
+      tags: [verification, control-plane]
+      responses:
+        '200':
+          description: Failure replay model retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Markdown document with structured specification
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-ief-provenance:
+        source_repo: everwork-ai/IEF-Operations
+        source_path: docs/governance/FAILURE_REPLAY_MODEL.md
+        freshness_threshold: until_amended
+        read_method: github_api | local_clone
+
+components:
+  schemas:
+    ProvenanceTriple:
+      type: object
+      description: >
+        Every IEF artifact consumed by IKE must carry a provenance triple
+        identifying its source repository, commit, and timestamp.
+      required:
+        - source_repo
+        - source_commit
+        - source_timestamp
+      properties:
+        source_repo:
+          type: string
+          description: GitHub repository (owner/repo format)
+          pattern: '^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$'
+        source_commit:
+          type: string
+          description: Short SHA of the commit containing the artifact
+          pattern: '^[a-f0-9]{7,12}$'
+        source_timestamp:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp of the commit or API response
+        local_fetched_at:
+          type: string
+          format: date-time
+          description: ISO-8601 timestamp when IKE fetched the artifact
+        freshness_status:
+          type: string
+          enum: [fresh, stale, fetch_failed, invalidated]
+          description: Current freshness status of this artifact in IKE cache
+        consecutive_fetch_failures:
+          type: integer
+          minimum: 0
+          description: Number of consecutive failed fetch attempts
+        schema_version:
+          type: string
+          description: Schema $id used to validate this artifact
+
+    GovernanceProfileList:
+      type: object
+      required: [profiles, provenance]
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/GovernanceProfile'
+        provenance:
+          $ref: '#/components/schemas/ProvenanceTriple'
+
+    GovernanceProfile:
+      type: object
+      required: [name, evidence_required, gates, dimensions]
+      properties:
+        name:
+          type: string
+          enum: [G-Lite, G-Std, G-Full]
+        evidence_required:
+          type: array
+          items:
+            type: string
+        gates:
+          type: array
+          items:
+            type: string
+        dimensions:
+          type: array
+          items:
+            type: string
+            enum: [functional, governance_compliance, boundary, stress]
+
+    ContractLock:
+      type: object
+      description: STAGE_G_CONTRACT_LOCK.json content
+      required: [schema_version, stage, slice, status]
+      properties:
+        schema_version:
+          type: string
+        stage:
+          type: string
+          const: G
+        slice:
+          type: string
+          const: G8-1
+        status:
+          type: string
+          enum: [frozen, amended, superseded]
+        provenance:
+          $ref: '#/components/schemas/ProvenanceTriple'
+
+    VerificationResultV2:
+      type: object
+      description: >
+        Hardened verification result with V2 traceability fields.
+        Full schema at schemas/RESULT_SCHEMA_V2.json.
+      required:
+        - verification_id
+        - task_id
+        - run_id
+        - overall_result
+        - overall_severity
+        - schema_version
+        - input_fingerprint
+        - evaluation_criteria_version
+        - coverage_bucket
+        - failure_classification
+        - provenance
+      properties:
+        verification_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        overall_result:
+          type: string
+          enum: [pass, fail, conditional, blocked]
+        overall_severity:
+          type: string
+          enum: [info, warning, error, critical]
+        retry_eligible:
+          type: boolean
+          description: Flag only — Controller authorizes retry, not consumer
+        schema_version:
+          type: string
+        input_fingerprint:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        evaluation_criteria_version:
+          type: string
+        coverage_bucket:
+          type: string
+        failure_classification:
+          type: [string, 'null']
+        dimensions_verified:
+          type: array
+          items:
+            $ref: '#/components/schemas/DimensionResult'
+        provenance:
+          $ref: '#/components/schemas/ProvenanceTriple'
+
+    DimensionResult:
+      type: object
+      required: [dimension, result, severity]
+      properties:
+        dimension:
+          type: string
+          enum: [functional, governance_compliance, boundary, stress]
+        result:
+          type: string
+          enum: [pass, fail, conditional, skipped]
+        severity:
+          type: string
+          enum: [info, warning, error, critical]
+        findings:
+          type: array
+          items:
+            type: string
+        evidence_refs:
+          type: array
+          items:
+            type: string
+            format: uri
+
+    VerificationEvidence:
+      type: object
+      description: Structured evidence supporting a verification dimension
+      required: [evidence_id, dimension, evidence_type, content_ref]
+      properties:
+        evidence_id:
+          type: string
+          format: uuid
+        dimension:
+          type: string
+          enum: [functional, governance_compliance, boundary, stress]
+        evidence_type:
+          type: string
+          enum: [artifact, ledger, execution_log, scope, review, test, stress]
+        content_ref:
+          type: string
+          format: uri
+        description:
+          type: string
+        provenance:
+          $ref: '#/components/schemas/ProvenanceTriple'
+
+    TaskLifecycle:
+      type: object
+      description: Task lifecycle state machine definition
+      required: [states, transitions]
+      properties:
+        states:
+          type: array
+          items:
+            type: string
+          minItems: 13
+          maxItems: 13
+        transitions:
+          type: array
+          items:
+            type: object
+            properties:
+              from:
+                type: string
+              to:
+                type: string
+              event:
+                type: string
+              evidence_required:
+                type: array
+                items:
+                  type: string
+        provenance:
+          $ref: '#/components/schemas/ProvenanceTriple'
+
+    RunLifecycle:
+      type: object
+      description: Run lifecycle state machine definition
+      required: [states, transitions]
+      properties:
+        states:
+          type: array
+          items:
+            type: string
+          minItems: 8
+          maxItems: 8
+        transitions:
+          type: array
+          items:
+            type: object
+            properties:
+              from:
+                type: string
+              to:
+                type: string
+              event:
+                type: string
+        provenance:
+          $ref: '#/components/schemas/ProvenanceTriple'
+
+    LedgerEntrySchema:
+      type: object
+      description: Ledger entry schema with all event types
+      required: [event_types, total_count]
+      properties:
+        event_types:
+          type: array
+          items:
+            type: object
+            properties:
+              event_type:
+                type: string
+              category:
+                type: string
+              description:
+                type: string
+        total_count:
+          type: integer
+          description: Total number of event types (26 = 22 original + 4 verification)
+        provenance:
+          $ref: '#/components/schemas/ProvenanceTriple'
+
+    LedgerEntry:
+      type: object
+      description: A single ledger entry for a task
+      required: [entry_id, sequence, event_type, task_id, timestamp]
+      properties:
+        entry_id:
+          type: string
+          format: uuid
+        sequence:
+          type: integer
+          minimum: 0
+        event_type:
+          type: string
+        task_id:
+          type: string
+          format: uuid
+        run_id:
+          type: [string, 'null']
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+
+    ProtocolSchemaBundle:
+      type: object
+      description: Bundle of IEF Protocol schemas
+      required: [task_envelope, run_event, artifact_ref, context_ref]
+      properties:
+        task_envelope:
+          type: object
+          description: TaskEnvelope schema (JSON Schema 2020-12)
+        run_event:
+          type: object
+          description: RunEvent schema (JSON Schema 2020-12)
+        artifact_ref:
+          type: object
+          description: ArtifactRef schema (JSON Schema 2020-12)
+        context_ref:
+          type: object
+          description: ContextRef schema (JSON Schema 2020-12)
+        provenance:
+          $ref: '#/components/schemas/ProvenanceTriple'
+
+    ErrorResponse:
+      type: object
+      required: [error_code, message]
+      properties:
+        error_code:
+          type: string
+          description: Machine-readable error code
+        message:
+          type: string
+          description: Human-readable error description
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context
+
+  responses:
+    NotFound:
+      description: Requested artifact not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: ARTIFACT_NOT_FOUND
+            message: The requested IEF artifact does not exist at the specified path
+            details:
+              source_repo: everwork-ai/IEF-Operations
+              source_path: schemas/nonexistent.json
+
+    ServiceUnavailable:
+      description: IEF source is temporarily unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error_code: IEF_UNREACHABLE
+            message: IEF repository is unreachable after consecutive fetch attempts
+            details:
+              consecutive_failures: 3
+              recommended_action: Stop consuming; do not use stale data for decisions
+
+# No write operations exist in this contract.
+# All paths are GET only.
+# No security schemes — IEF repos are public GitHub repositories.
+# Access is via GitHub API (public) or local git clone.
+
+x-ief-consumer-contract:
+  version: '1.0.0'
+  consumer: IKE / MyAttention
+  consumer_repo: D:\code\MyAttention
+  provider: IEF Ecosystem (IEF-Program, IEF-Operations, IEF-Protocol, IEF-Governance)
+  direction: read-only
+  write_operations: 0
+  read_operations: 12
+  forbidden_sources:
+    - raw_runner_cache
+    - adapter_staging_area
+    - chat_memory
+    - unreviewed_knowledge_observations
+    - private_conversations
+    - non_main_branches
+  anti_integration_rules:
+    - AI-1: No posting IEF results to IEF PRs/issues
+    - AI-2: No triggering IEF re-verification
+    - AI-3: No auto-promoting IKE tasks from IEF results
+    - AI-4: No caching IEF results as IKE project truth
+    - AI-5: No interpreting retry_eligible as retry authorization
+    - AI-6: No interpreting closure_criteria_met as closure authorization
+    - AI-7: No modifying IEF schemas
+    - AI-8: No forking IEF schemas into drifting local copies
+  anti_a2a_rules:
+    - AP-1: No using A2A Agent Card as substitute for Protocol schemas
+    - AP-2: No advertising IEF capabilities via A2A without Controller approval
+    - AP-3: No implementing A2A task delegation through IEF runners
+    - AP-4: A2A Agent Card is read-only projection, not contract replacement
+  provenance_required: true
+  freshness_enforced: true
+  repeatability_guaranteed: true
