@@ -176,7 +176,7 @@ The IEF program uses a controlled classification vocabulary for triggers, task t
 - `SMOKE_TEST` — End-to-end validation
 
 **Governance Profiles:**
-- `G-Lite` — Minimal governance (auto-verification, no review)
+- `G-Lite` — Minimal governance (review + auto-verification)
 - `G-Std` — Standard governance (review + verification)
 - `G-Full` — Full governance (all gates G1–G7)
 
@@ -222,7 +222,7 @@ Frozen artifacts include:
 
 | Governance Profile | PR Required | Review Required | Verification Required | Merge Authority |
 |---|---|---|---|---|
-| G-Lite | Yes | No | Auto-verification | Auto-merge after verification pass |
+| G-Lite | Yes | Yes (1 reviewer) | Auto-verification | Human merge after review + verification |
 | G-Std | Yes | Yes (1 reviewer) | Full verification | Human merge after review + verification |
 | G-Full | Yes | Yes (2 reviewers) | Full verification + all gates | Human merge after all gates pass |
 
@@ -248,7 +248,7 @@ Every PR review must verify:
 
 - Every PR targeting frozen artifacts must pass through the Verification Module (defined in `VERIFICATION_HARDENING_SPEC.md`).
 - Verification dimensions required depend on governance profile:
-  - G-Lite: `functional` only
+  - G-Lite: `functional` + `boundary`
   - G-Std: `functional` + `governance_compliance` + `boundary`
   - G-Full: all dimensions including `stress`
 - A `blocked` or `fail` verification result prevents merge regardless of review status.
