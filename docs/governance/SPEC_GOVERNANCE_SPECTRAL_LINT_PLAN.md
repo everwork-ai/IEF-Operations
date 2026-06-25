@@ -7,6 +7,14 @@
 
 ---
 
+## Enforcement Deferral
+
+> **This plan does NOT define enforcement behavior. Enforcement design is deferred until after the Classification Registry Spec is stable.**
+>
+> Follow-up recommendation: Enforcement design is to be scoped in a separate task after the Classification Registry Spec reaches stability.
+
+---
+
 ## 1. Lintable Spec Inventory
 
 ### 1.1 IEF-Operations (`everwork-ai/IEF-Operations`)
@@ -129,7 +137,7 @@ These rules enforce consistent naming across all IEF specs.
 
 | Rule ID | Severity | Description |
 |---------|----------|-------------|
-| `ief-naming-001` | warning | Schema filenames must use `kebab-case.json` or `kebab-case.yaml` (exceptions: `RESULT_SCHEMA_V2.json`, `IKE_READ_MODEL_VERSION_1.json` — grandfathered) |
+| `ief-naming-001` | warning | Schema filenames must use one of: `kebab-case.json`, `kebab-case.schema.json`, `UPPER_SNAKE_CASE.json`, or `UPPER_SNAKE_CASE_V{N}.json` (all current filenames are compliant) |
 | `ief-naming-002` | warning | Schema property names must use `snake_case` |
 | `ief-naming-003` | warning | Schema definition names (in `components.schemas`) must use `PascalCase` |
 | `ief-naming-004` | info | Enum values should use `snake_case` or `kebab-case` consistently within a schema |
@@ -222,6 +230,17 @@ rules:
         match: "^\\d+\\.\\d+\\.\\d+"
 
   # === Category C: Naming Conventions ===
+  ief-naming-001-filename-convention:
+    description: "Schema filenames must follow IEF naming patterns"
+    severity: warning
+    given: "$"
+    then:
+      field: "$id"
+      function: pattern
+      functionOptions:
+        # Accepts: kebab-case, kebab-case.schema, UPPER_SNAKE_CASE, UPPER_SNAKE_V{N}
+        match: "^[a-z][a-z0-9-]*(\\.schema)?\\.json$|^[A-Z][A-Z0-9_]*(\\.schema)?\\.json$"
+
   ief-naming-003-pascal-schemas:
     description: "Schema definitions must use PascalCase"
     severity: warning
@@ -243,282 +262,134 @@ rules:
         schema:
           type: string
           pattern: "^(#|\\.\\./|https?://)"
+
+# === Suppression overrides for grandfathered violations ===
+# Spectral overrides disable specific rules for specific file paths.
+# Use these instead of a separate suppressions file.
+overrides:
+  # VERIFICATION_SPEC_V0 — empty paths is intentional (not an HTTP service)
+  - files:
+      - "docs/VERIFICATION_SPEC_V0.yaml"
+    rules:
+      ief-oas-009-paths-or-tags: off
+
+  # Cross-repo references may not resolve in isolated lint
+  - files:
+      - "docs/VERIFICATION_SPEC_V0.yaml"
+    rules:
+      ief-xref-001-ref-resolution: off
 ```
 
 ### 2.3 Severity Legend
 
-| Level | Meaning | CI Behavior (when enabled) |
-|-------|---------|---------------------------|
-| `error` | Violation must be fixed before merge | Blocks PR merge |
-| `warning` | Violation should be addressed | PR annotation, non-blocking |
-| `info` | Suggestion for improvement | Logged only, no annotation |
-| `hint` | Style preference, optional | Logged only, no annotation |
+| Level | Meaning |
+|-------|---------|
+| `error` | Violation must be fixed — spec is structurally or semantically broken |
+| `warning` | Violation should be addressed — spec deviates from conventions |
+| `info` | Suggestion for improvement — optional enhancement |
+| `hint` | Style preference — optional, no action required |
 
 ---
 
-## 3. CI Integration Approach
+## 3. Adoption Phases
 
-### 3.1 GitHub Actions Workflow Structure
-
-The recommended approach is a **reusable workflow** in IEF-Operations that each repo can call.
-
-```yaml
-# .github/workflows/spectral-lint.yml (EXAMPLE — not deployed)
-name: Spectral Lint
-
-on:
-  pull_request:
-    paths:
-      - 'schemas/**'
-      - 'contracts/**'
-      - 'specs/**'
-      - 'docs/**/*.yaml'
-  push:
-    branches: [main]
-    paths:
-      - 'schemas/**'
-      - 'contracts/**'
-      - 'specs/**'
-      - 'docs/**/*.yaml'
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Spectral
-        uses: stoplightio/spectral-action@latest
-        with:
-          file_glob: "schemas/*.json contracts/*.yaml specs/*.yaml docs/**/*.yaml"
-          spectral_ruleset: ".spectral.yaml"
-
-      - name: Run Spectral
-        run: |
-          npx @stoplight/spectral-cli lint \
-            --ruleset .spectral.yaml \
-            --format github-actions \
-            "schemas/*.json" \
-            "contracts/*.yaml" \
-            "specs/*.yaml" \
-            "docs/**/*.yaml"
-```
-
-### 3.2 Multi-Repo Matrix Strategy
-
-For cross-repo linting from a single workflow (e.g., in IEF-Operations or a central IEF-Program repo):
-
-```yaml
-jobs:
-  lint-matrix:
-    strategy:
-      matrix:
-        repo:
-          - name: IEF-Operations
-            patterns: "schemas/*.json docs/**/*.yaml"
-          - name: IEF-Adapters
-            patterns: "contracts/*.yaml"
-          - name: IEF-Runners
-            patterns: "contracts/*.yaml"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: "everwork-ai/${{ matrix.repo.name }}"
-      - name: Lint ${{ matrix.repo.name }}
-        run: |
-          npx @stoplight/spectral-cli lint \
-            --ruleset .spectral.yaml \
-            ${{ matrix.repo.patterns }}
-```
-
-### 3.3 Local Pre-Commit Hook Option
-
-For developer local validation before pushing:
-
-```bash
-#!/bin/bash
-# .git/hooks/pre-commit (or via lefthook/husky)
-FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(json|yaml)$' | grep -E '(schemas|contracts|specs|docs)/')
-if [ -n "$FILES" ]; then
-  npx @stoplight/spectral-cli lint --ruleset .spectral.yaml $FILES
-fi
-```
-
-### 3.4 Spectral CLI Invocation Patterns
-
-| Context | Command |
-|---------|---------|
-| Local, all specs | `spectral lint --ruleset .spectral.yaml "schemas/*.json" "contracts/*.yaml" "docs/**/*.yaml"` |
-| Local, single file | `spectral lint --ruleset .spectral.yaml schemas/run.schema.json` |
-| CI, JSON output | `spectral lint --ruleset .spectral.yaml --format json --output results.json ...` |
-| CI, GitHub Actions | `spectral lint --ruleset .spectral.yaml --format github-actions ...` |
-| Dry-run / report | `spectral lint --ruleset .spectral.yaml --format pretty ... 2>&1 \| tee lint-report.txt` |
-
-### 3.5 Custom Ruleset Packaging
-
-The `.spectral.yaml` ruleset file should live at the root of IEF-Operations and be referenceable by other repos via:
-- Git submodule pointing to IEF-Operations
-- Published npm package (`@ief/spectral-rules`) — future option
-- Direct copy with version pinning — simplest initial approach
-- Shared ruleset URL fetched at CI time
-
----
-
-## 4. Failure Behavior (Phased)
-
-### 4.1 Phase 0: Report-Only
-
-- Spectral runs manually or in a non-blocking CI job
-- Results logged to a file or CI artifact
-- No PR annotations, no status checks
-- Purpose: establish baseline violation count
-- Duration: 1–2 weeks
-
-### 4.2 Phase 1: Warning Annotations
-
-- Spectral runs on every PR touching spec files
-- Violations appear as PR review comments (warning level)
-- Status check is **non-blocking** (shows as "pending" or "success" regardless)
-- Purpose: visibility without disruption
-- Duration: 2–4 weeks
-
-### 4.3 Phase 2: Required Check (New Specs Only)
-
-- Spectral runs as a required status check
-- Only **new or modified** spec files must pass
-- Existing unchanged specs are exempt (via suppression file)
-- `error` severity blocks merge; `warning` does not
-- Purpose: prevent new violations while grandfathering existing
-- Duration: 4–8 weeks
-
-### 4.4 Phase 3: Full Required Check
-
-- All spec files must pass (suppressions sunset)
-- Both new and existing specs enforced
-- `error` severity blocks merge
-- Purpose: full compliance
-- Timeline: after baseline violations are resolved
-
-### 4.5 Phase Transition Criteria
-
-| Transition | Criteria |
-|-----------|----------|
-| 0 → 1 | Baseline violation count documented; ruleset stable for 1 week |
-| 1 → 2 | No new violations introduced in 2 weeks; team familiar with ruleset |
-| 2 → 3 | All baseline violations resolved or have documented sunset plan |
-
----
-
-## 5. Adoption Phases
-
-### 5.1 Phase Overview
+### 3.1 Phase Overview
 
 | Phase | Description | Estimated Effort |
 |-------|-------------|-----------------|
 | **0 — Scoping** (current) | This document. Inventory and rule design. | 1 day |
-| **1 — Baseline Ruleset + CI Scaffold** | Create `.spectral.yaml`, validate rules against all 13 specs, CI workflow skeleton (disabled/non-blocking). | 2–3 days |
-| **2 — Report Mode Across All Repos** | Enable Spectral in report-only mode across IEF-Operations, IEF-Adapters, IEF-Runners. Document baseline violations. | 1–2 days |
-| **3 — Warning Mode with PR Annotations** | Enable PR annotations (non-blocking). Monitor for false positives. Tune rules. | 1 week monitoring |
-| **4 — Required Check for New/Changed Specs** | Enable required check for `paths` matching PR diffs. Grandfather existing specs. | 2–3 days setup |
-| **5 — Full Enforcement** | All specs must pass. Suppressions sunset. Baseline violations resolved. | Ongoing remediation |
+| **1 — Baseline Ruleset** | Create `.spectral.yaml`, validate rules against all 13 specs, document baseline violations. | 2–3 days |
+| **2 — Report Mode Across All Repos** | Run Spectral in report-only mode across IEF-Operations, IEF-Adapters, IEF-Runners. Document baseline violations. | 1–2 days |
+| **3 — Rule Tuning** | Monitor for false positives. Tune rules. Expand coverage as new specs are authored. | Ongoing |
 
-### 5.2 Effort Breakdown
+### 3.2 Effort Breakdown
 
 **Phase 1 (Baseline Ruleset):**
 - Write `.spectral.yaml` ruleset: 4–6 hours
 - Test against all 13 spec files: 2 hours
 - Tune false positives: 2–4 hours
-- CI workflow scaffold: 2 hours
 
 **Phase 2 (Report Mode):**
-- Enable CI across 3 repos: 1 hour per repo
+- Run Spectral across 3 repos: 1 hour per repo
 - Baseline audit and violation documentation: 4 hours
-- Write suppression file for known violations: 2 hours
 
-**Phase 3 (Warning Mode):**
-- Configure GitHub Actions annotations: 2 hours
-- Monitor and triage false positives: ongoing (1 week)
-
-**Phase 4 (Required Check for New Specs):**
-- Configure path-based required checks: 2 hours
-- Write suppression file for grandfathered specs: 2 hours
-- Document process for new spec authors: 2 hours
-
-**Phase 5 (Full Enforcement):**
-- Remediation work per violation (see Section 8): variable
-- Suppression sunset: 1 hour per batch
+**Phase 3 (Rule Tuning):**
+- Monitor and triage false positives: ongoing
 
 ---
 
-## 6. Avoiding Blockage of Existing Merged Contracts
+## 4. Avoiding Blockage of Existing Merged Contracts
 
-### 6.1 Grandfathering Strategy
+### 4.1 Grandfathering Strategy
 
 Existing merged contracts are **frozen at their current state** and should not be broken by new lint rules. The strategy:
 
 1. Run Spectral in report-only mode against all existing specs
 2. Document every violation with a rationale (accepted risk, known deviation, etc.)
-3. Create a suppression file listing each accepted violation
-4. Existing specs pass CI as long as their suppressions are active
-5. New specs or modifications must pass without suppressions
+3. Add Spectral `overrides` in `.spectral.yaml` listing each accepted violation
+4. Existing specs pass lint as long as their overrides are active
+5. New specs or modifications must pass without overrides
 
-### 6.2 Suppression File Approach (`.spectral-suppressions.yaml`)
+### 4.2 Suppression via Spectral Overrides
 
-Spectral supports a suppressions file that exempts specific violations:
+Spectral supports suppression of specific rules for specific file paths using the `overrides` key in `.spectral.yaml`:
 
 ```yaml
-# .spectral-suppressions.yaml (EXAMPLE)
-# Each entry: file path + rule ID + optional justification
+# .spectral.yaml — overrides section (EXAMPLE)
+# Each override: file glob + rule ID + disabled severity
 
-suppressions:
+overrides:
   # IEF-Operations schemas — naming convention grandfathered
-  - path: "schemas/IKE_READ_MODEL_VERSION_1.json"
-    rule: "ief-naming-001"
-    reason: "Legacy naming — UPPER_SNAKE_CASE predates kebab-case convention"
-
-  - path: "schemas/RESULT_SCHEMA_V2.json"
-    rule: "ief-naming-001"
-    reason: "Legacy naming — UPPER_SNAKE_CASE predates kebab-case convention"
+  # (No longer needed — ief-naming-001 now accepts all current filename patterns)
 
   # VERIFICATION_SPEC_V0 — empty paths is intentional
-  - path: "docs/VERIFICATION_SPEC_V0.yaml"
-    rule: "ief-oas-009"
-    reason: "Verification operates within lifecycle, not as HTTP service. Empty paths is by design."
+  - files:
+      - "docs/VERIFICATION_SPEC_V0.yaml"
+    rules:
+      ief-oas-009-paths-or-tags: off
 
   # Cross-repo references may not resolve in isolated lint
-  - path: "docs/VERIFICATION_SPEC_V0.yaml"
-    rule: "ief-xref-001"
-    reason: "References sibling schemas via relative path; may not resolve in CI checkout"
+  - files:
+      - "docs/VERIFICATION_SPEC_V0.yaml"
+    rules:
+      ief-xref-001-ref-resolution: off
 ```
 
-### 6.3 Suppression Granularity
+For inline suppression within a spec file (when a single rule needs to be disabled for a specific line or block), use Spectral's inline comment syntax:
 
-Suppressions support three levels of granularity:
+```yaml
+# spectral-disable ief-rule-id
+some_field: value
+```
+
+### 4.3 Override Granularity
+
+Overrides support three levels of granularity:
 
 | Level | Syntax | Use Case |
 |-------|--------|----------|
-| **Per-file, per-rule** | `path: "file.yaml"`, `rule: "rule-id"` | Preferred — most specific |
-| **Per-file, all rules** | `path: "file.yaml"` | For specs known to have many accepted deviations |
-| **Per-rule, all files** | `rule: "rule-id"` | For rules not yet enforced across any repo |
+| **Per-file, per-rule** | `files: ["file.yaml"]`, `rules: { rule-id: off }` | Preferred — most specific |
+| **Per-file, all rules** | `files: ["file.yaml"]`, `rules: { all: off }` | For specs known to have many accepted deviations |
+| **Per-rule, all files** | Remove or disable the rule in the `rules` section | For rules not yet enforced across any repo |
 
-### 6.4 Baseline Compliance Exceptions
+### 4.4 Baseline Compliance Exceptions
 
 For violations that are **by design** (not technical debt):
 
-- Document the rationale in the suppression file `reason` field
+- Document the rationale in a comment above the override entry
 - Link to the governing spec or Controller decision that authorized the deviation
-- Mark as `permanent: true` in the suppression entry
+- Mark as permanent (no sunset date)
 
 For violations that are **technical debt** (should be fixed eventually):
 
 - Document the remediation plan
-- Set a sunset date in the suppression entry
+- Set a sunset date in a comment above the override entry
 - Track in a GitHub issue for visibility
 
-### 6.5 Sunset Timeline for Suppressions
+### 4.5 Sunset Policy for Overrides
 
-| Suppression Type | Sunset Policy |
-|-----------------|---------------|
+| Override Type | Sunset Policy |
+|---------------|---------------|
 | Naming convention (legacy) | Permanent — grandfathered with documented exception |
 | Structural (missing optional fields) | 90 days — fix in next spec revision |
 | Cross-reference (unresolvable `$ref`) | 60 days — fix reference or restructure |
@@ -526,9 +397,9 @@ For violations that are **technical debt** (should be fixed eventually):
 
 ---
 
-## 7. Relationship to Future TypeSpec Migration
+## 5. Relationship to Future TypeSpec Migration
 
-### 7.1 Spectral and TypeSpec — Complementary, Not Competitive
+### 5.1 Spectral and TypeSpec — Complementary, Not Competitive
 
 Spectral and TypeSpec operate at different layers of the spec lifecycle:
 
@@ -539,7 +410,7 @@ Spectral and TypeSpec operate at different layers of the spec lifecycle:
 | **Scope** | Naming, structure, references, conventions | Type correctness, schema composition |
 | **Enforcement** | Post-authoring check | Compile-time check |
 
-### 7.2 Shared Validation Concepts
+### 5.2 Shared Validation Concepts
 
 Both tools enforce these overlapping concerns:
 
@@ -551,38 +422,36 @@ Both tools enforce these overlapping concerns:
 | Reference integrity | `$ref` resolution check | Import resolution at compile |
 | Enum validity | Pattern and value checks | Union type enforcement |
 
-### 7.3 What Spectral Validates That TypeSpec Cannot
+### 5.3 What Spectral Validates That TypeSpec Cannot
 
 - **Post-hoc validation of hand-written YAML/JSON:** TypeSpec only validates what it generates. Spectral validates specs regardless of authoring tool.
 - **Cross-repo reference integrity:** Spectral can check that `$ref` targets across repos exist (with appropriate tooling).
 - **File-level conventions:** Filename patterns, directory placement, metadata extensions.
 - **Legacy spec compliance:** Existing specs not (yet) migrated to TypeSpec still need validation.
 
-### 7.4 What TypeSpec Replaces That Spectral Checks
+### 5.4 What TypeSpec Replaces That Spectral Checks
 
 - **Schema composition correctness:** TypeSpec's type system catches structural errors that Spectral rules can only approximate.
 - **Model inheritance and mixins:** TypeSpec handles `extends`/`is` composition; Spectral would need complex rules.
 - **Code generation consistency:** TypeSpec generates schemas, eliminating a class of "hand-written schema drift" that Spectral would catch.
 
-### 7.5 Dual-Running Strategy During Migration
+### 5.5 Dual-Running Strategy During Migration
 
 When IEF begins migrating specs to TypeSpec, the recommended approach:
 
 1. **TypeSpec generates** the canonical YAML/JSON output
 2. **Spectral validates** the generated output against IEF-specific conventions (naming, metadata, cross-references)
-3. **Both tools run in CI:**
-   - TypeSpec compilation must succeed (blocks on type errors)
-   - Spectral lint on generated output must pass (blocks on convention violations)
+3. **Both tools run** in the validation pipeline
 4. **Hand-written specs** (not yet migrated) continue to be validated by Spectral alone
-5. **Gradual migration:** As each spec moves to TypeSpec, its Spectral suppressions are removed and TypeSpec takes over structural validation
+5. **Gradual migration:** As each spec moves to TypeSpec, its Spectral overrides are removed and TypeSpec takes over structural validation
 
 ```
 Authoring Flow (during migration):
-  [TypeSpec source] → compile → [YAML/JSON output] → Spectral lint → CI pass/fail
-  [Hand-written YAML/JSON] → Spectral lint → CI pass/fail
+  [TypeSpec source] → compile → [YAML/JSON output] → Spectral lint → pass/fail
+  [Hand-written YAML/JSON] → Spectral lint → pass/fail
 ```
 
-### 7.6 Spectral Ruleset Adaptation for TypeSpec
+### 5.6 Spectral Ruleset Adaptation for TypeSpec
 
 Some Spectral rules become redundant after TypeSpec migration:
 - `ief-schema-001` through `ief-schema-006` — TypeSpec guarantees these
@@ -596,25 +465,25 @@ Rules that remain valuable:
 
 ---
 
-## 8. Expected Cleanup Work for Baseline Compliance
+## 6. Expected Cleanup Work for Baseline Compliance
 
-### 8.1 Audit Methodology
+### 6.1 Audit Methodology
 
 This audit is based on inspection of all 13 lintable files across the three repos. Violations are categorized by rule and severity.
 
-### 8.2 Estimated Violations Per Repo
+### 6.2 Estimated Violations Per Repo
 
 **IEF-Operations (11 files):**
 
 | Rule ID | Files Affected | Violation Type | Remediation |
 |---------|---------------|----------------|-------------|
-| `ief-naming-001` | 2 (`IKE_READ_MODEL_VERSION_1.json`, `RESULT_SCHEMA_V2.json`) | UPPER_SNAKE_CASE filenames | Grandfather (permanent suppression) |
-| `ief-oas-009` | 1 (`VERIFICATION_SPEC_V0.yaml`) | Empty `paths: {}` | Grandfather (by-design, not an HTTP service) |
+| `ief-naming-001` | 0 (pattern broadened) | Previously UPPER_SNAKE_CASE filenames — now compliant | N/A — rule updated |
+| `ief-oas-009` | 1 (`VERIFICATION_SPEC_V0.yaml`) | Empty `paths: {}` | Override (by-design, not an HTTP service) |
 | `ief-xref-001` | 1 (`VERIFICATION_SPEC_V0.yaml`) | `$ref` to `../schemas/` may not resolve in isolated checkout | Fix with absolute URIs or restructure (60-day sunset) |
 | `ief-schema-007` | ~5 schemas | Missing `additionalProperties: false` | Add to each schema (low effort, ~30 min each) |
 | `ief-schema-008` | ~3 schemas | Some properties missing `description` | Add descriptions (medium effort, ~1 hour per schema) |
 
-**Estimated IEF-Operations total:** ~12 violations (2 permanent, ~10 fixable)
+**Estimated IEF-Operations total:** ~10 violations (1 permanent override, ~9 fixable)
 
 **IEF-Adapters (1 file):**
 
@@ -634,31 +503,30 @@ This audit is based on inspection of all 13 lintable files across the three repo
 
 **Estimated IEF-Runners total:** ~1–3 violations (low effort)
 
-### 8.3 Violation Categorization
+### 6.3 Violation Categorization
 
 | Category | Count | Severity | Effort |
 |----------|-------|----------|--------|
-| **Naming convention** (legacy filenames) | 2 | warning | Permanent suppression |
+| **By-design exceptions** (empty paths) | 1 | warning | Permanent override |
 | **Structural** (missing `additionalProperties`) | ~5 | info | Low — 30 min per file |
 | **Missing fields** (descriptions, contact) | ~5 | warning/info | Low-Medium — 1 hour per file |
 | **Cross-reference** (`$ref` resolution) | 1 | error | Medium — may require restructure |
-| **By-design exceptions** (empty paths) | 1 | warning | Permanent suppression |
 
-### 8.4 Remediation Effort Estimate
+### 6.4 Remediation Effort Estimate
 
 | Priority | Work | Estimated Time |
 |----------|------|---------------|
-| P1 — Write suppression file | Document all accepted violations | 2 hours |
-| P2 — Add `additionalProperties: false` | 5 schema files | 2.5 hours |
-| P3 — Add missing `description` fields | Properties in ~3 schemas | 3 hours |
-| P4 — Fix `$ref` resolution | `VERIFICATION_SPEC_V0.yaml` | 1–2 hours |
+| P1 — Add Spectral overrides | Document all accepted violations | 1 hour |
+| P2 — Fix `$ref` resolution | `VERIFICATION_SPEC_V0.yaml` | 1–2 hours |
+| P3 — Add `additionalProperties: false` | 5 schema files | 2.5 hours |
+| P4 — Add missing `description` fields | Properties in ~3 schemas | 3 hours |
 | P5 — Enrich `info.contact` | 1–2 OAS files | 30 min |
-| **Total remediation** | | **~9–10 hours** |
+| **Total remediation** | | **~7–9 hours** |
 
-### 8.5 Priority Ordering
+### 6.5 Priority Ordering
 
-1. **Write suppression file first** — unblocks CI enforcement for new specs immediately
-2. **Fix `$ref` resolution** — error severity, must be resolved before Phase 2
+1. **Add Spectral overrides first** — documents accepted deviations clearly
+2. **Fix `$ref` resolution** — error severity, should be resolved before broader adoption
 3. **Add `additionalProperties`** — improves schema strictness, low risk
 4. **Add missing descriptions** — improves documentation quality
 5. **Enrich contact info** — nice-to-have, lowest priority
@@ -672,8 +540,7 @@ This audit is based on inspection of all 13 lintable files across the three repo
 | `npm install -g @stoplight/spectral-cli` | Install Spectral CLI |
 | `spectral lint <files>` | Lint one or more files |
 | `spectral lint --ruleset <file>` | Use custom ruleset |
-| `spectral lint --format json` | Output as JSON (for CI parsing) |
-| `spectral lint --format github-actions` | Output as GitHub Actions annotations |
+| `spectral lint --format json` | Output as JSON (for programmatic parsing) |
 | `spectral lint --format pretty` | Human-readable output |
 | `spectral lint --verbose` | Show all rules, including passing ones |
 | `spectral lint --fail-severity error` | Exit non-zero only on errors |
@@ -695,12 +562,12 @@ This audit is based on inspection of all 13 lintable files across the three repo
 |------|-----------|
 | **Spectral** | Open-source JSON/YAML linter by Stoplight, used for API spec validation |
 | **Ruleset** | A `.spectral.yaml` file defining validation rules |
-| **Suppression** | An exemption for a known violation, documented in `.spectral-suppressions.yaml` |
+| **Override** | A Spectral mechanism to disable specific rules for specific file paths within `.spectral.yaml` |
 | **Grandfathering** | Accepting existing violations without requiring immediate remediation |
 | **TypeSpec** | Microsoft's DSL for API description, compiling to OpenAPI/JSON Schema |
-| **Baseline compliance** | The state where all existing specs pass lint (with suppressions for accepted deviations) |
-| **Sunset** | A deadline after which a suppression expires and the violation must be resolved |
+| **Baseline compliance** | The state where all existing specs pass lint (with overrides for accepted deviations) |
+| **Sunset** | A deadline after which an override expires and the violation must be resolved |
 
 ---
 
-*This document is a scoping plan only. No CI workflows, ruleset files, or spec modifications are included. Implementation begins in Phase 1.*
+*This document is a scoping plan only. No CI workflows, ruleset files, or spec modifications are included. Enforcement design is deferred until after the Classification Registry Spec is stable.*
