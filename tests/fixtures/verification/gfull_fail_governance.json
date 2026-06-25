@@ -1,0 +1,50 @@
+{
+  "request": {
+    "verification_id": "55555555-5555-5555-5555-555555555555",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    "governance_profile": "G-Full",
+    "artifact_refs": ["https://github.com/everwork-ai/IEF-Program/blob/main/docs/IMPLEMENTATION.md"],
+    "context_refs": ["https://github.com/everwork-ai/IEF-Protocol/blob/main/schemas/run_event.schema.json"],
+    "allowed_files": ["docs/IMPLEMENTATION.md", "src/worker.py"],
+    "forbidden_actions": ["merge", "close", "rebase"],
+    "review_result": {
+      "decision": "approved",
+      "reviewer": "ief-reviewer",
+      "review_timestamp": "2026-06-21T22:00:00+08:00"
+    },
+    "ledger_entries": [],
+    "requested_dimensions": ["functional", "governance_compliance", "boundary", "stress"],
+    "retry_count": 0
+  },
+  "expected_result": {
+    "verification_id": "55555555-5555-5555-5555-555555555555",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    "verification_timestamp": "2026-06-21T23:04:00+08:00",
+    "verifier": "ief-verifier-fixture",
+    "governance_profile": "G-Full",
+    "dimensions_verified": [
+      { "dimension": "functional", "result": "pass", "severity": "info" },
+      {
+        "dimension": "governance_compliance",
+        "result": "fail",
+        "severity": "error",
+        "findings": ["G3 (code review) independent review not found in ledger entries"],
+        "criteria_checked": [
+          { "criterion": "GC-3: No self-acceptance", "result": "fail", "evidence": "No independent review_completed event for G3" }
+        ]
+      },
+      { "dimension": "boundary", "result": "pass", "severity": "info" },
+      { "dimension": "stress", "result": "pass", "severity": "info" }
+    ],
+    "overall_result": "fail",
+    "overall_severity": "error",
+    "retry_eligible": true,
+    "retry_count": 0,
+    "closure_criteria_met": false,
+    "parent_artifact": "https://github.com/everwork-ai/IEF-Program/pull/13"
+  },
+  "test_id": "T5",
+  "description": "G-Full governance fail: independent review missing for G3"
+}

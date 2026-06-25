@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ief.dev/schemas/verification_evidence.schema.json",
+  "title": "IEF Verification Evidence",
+  "description": "Structured evidence supporting a verification dimension result.",
+  "type": "object",
+  "required": [
+    "evidence_id",
+    "verification_id",
+    "dimension",
+    "evidence_type",
+    "source",
+    "content",
+    "collected_at"
+  ],
+  "properties": {
+    "evidence_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "verification_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "dimension": {
+      "type": "string",
+      "enum": ["functional", "governance_compliance", "boundary", "stress"]
+    },
+    "evidence_type": {
+      "type": "string",
+      "enum": [
+        "artifact",
+        "ledger_event",
+        "execution_log",
+        "scope_comparison",
+        "review_result",
+        "test_result",
+        "stress_output"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "description": "Origin of the evidence (runner, ledger, git, reviewer, etc.)"
+    },
+    "content": {
+      "type": "object",
+      "description": "Structured evidence payload",
+      "additionalProperties": true
+    },
+    "artifact_ref": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "ArtifactRef pointing to the evidence artifact"
+    },
+    "collected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "integrity_hash": {
+      "type": ["string", "null"],
+      "description": "SHA-256 hash of the evidence content for tamper detection"
+    }
+  }
+}

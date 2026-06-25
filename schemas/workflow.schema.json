@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ief.dev/schemas/workflow.schema.json",
+  "title": "IEF Workflow",
+  "description": "A multi-step graph or sequence of tasks and approval checkpoints. Defines task ordering, dependencies, and completion conditions.",
+  "type": "object",
+  "required": ["workflow_id", "title", "status", "task_nodes", "transitions", "created_at"],
+  "properties": {
+    "workflow_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this workflow"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable workflow title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Workflow description"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "paused", "completed", "failed", "cancelled"],
+      "description": "Current workflow state"
+    },
+    "governance_profile": {
+      "type": "string",
+      "description": "Governance profile governing this workflow"
+    },
+    "owner": {
+      "type": "string",
+      "description": "Workflow owner identity"
+    },
+    "entry_conditions": {
+      "type": "object",
+      "description": "Conditions that must be met before the workflow can start",
+      "additionalProperties": true
+    },
+    "task_nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["node_id", "task_id"],
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "description": "Unique node identifier within this workflow"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reference to the task"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Node IDs this node depends on (must complete before this node can start)"
+          },
+          "parallel_group": {
+            "type": ["integer", "null"],
+            "description": "If set, this node runs in parallel with other nodes in the same group"
+          },
+          "optional": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this node is optional for workflow completion"
+          }
+        }
+      },
+      "description": "Tasks in this workflow as nodes in a DAG"
+    },
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from_node_id", "to_node_id", "condition"],
+        "properties": {
+          "from_node_id": {
+            "type": "string",
+            "description": "Source node ID"
+          },
+          "to_node_id": {
+            "type": "string",
+            "description": "Target node ID"
+          },
+          "condition": {
+            "type": "string",
+            "description": "Transition condition (e.g., task_completed, review_approved, approval_granted)"
+          },
+          "auto_transition": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether this transition happens automatically when the condition is met"
+          }
+        }
+      },
+      "description": "Edges between task nodes"
+    },
+    "approval_checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["checkpoint_id", "before_node_id"],
+        "properties": {
+          "checkpoint_id": {
+            "type": "string"
+          },
+          "before_node_id": {
+            "type": "string",
+            "description": "Node ID that requires this approval before starting"
+          },
+          "approval_type": {
+            "type": "string",
+            "description": "Type of approval required"
+          },
+          "approver": {
+            "type": "string",
+            "description": "Identity or role required to approve"
+          }
+        }
+      },
+      "description": "Approval gates within the workflow"
+    },
+    "completion_conditions": {
+      "type": "object",
+      "properties": {
+        "all_required_tasks_completed": {
+          "type": "boolean",
+          "default": true
+        },
+        "all_approvals_granted": {
+          "type": "boolean",
+          "default": true
+        },
+        "no_failed_tasks": {
+          "type": "boolean",
+          "default": true
+        },
+        "custom_conditions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional custom completion conditions"
+        }
+      },
+      "description": "Conditions that must all be true for the workflow to be considered completed"
+    },
+    "retry_policy": {
+      "type": "object",
+      "properties": {
+        "max_retries_per_task": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 3
+        },
+        "retry_delay_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 60
+        },
+        "escalate_after_retries": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "description": "Retry policy for failed tasks within this workflow"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional workflow metadata",
+      "additionalProperties": true
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "started_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    }
+  }
+}

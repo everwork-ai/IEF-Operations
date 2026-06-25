@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ief.dev/schemas/verification_result.schema.json",
+  "title": "IEF Verification Result",
+  "description": "Output of the verification module. Contains dimension-level results, overall aggregation, and closure status.",
+  "type": "object",
+  "required": [
+    "verification_id",
+    "task_id",
+    "run_id",
+    "verification_timestamp",
+    "verifier",
+    "governance_profile",
+    "dimensions_verified",
+    "overall_result",
+    "overall_severity",
+    "retry_eligible",
+    "retry_count",
+    "closure_criteria_met",
+    "parent_artifact"
+  ],
+  "properties": {
+    "verification_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "task_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "verification_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verifier": {
+      "type": "string",
+      "description": "Identity of the verification agent or module"
+    },
+    "governance_profile": {
+      "type": "string",
+      "enum": ["G-Lite", "G-Std", "G-Full"]
+    },
+    "dimensions_verified": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["dimension", "result", "severity"],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "enum": ["functional", "governance_compliance", "boundary", "stress"]
+          },
+          "result": {
+            "type": "string",
+            "enum": ["pass", "fail", "conditional", "skipped"]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": { "type": "string", "format": "uri" }
+          },
+          "findings": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["info", "warning", "error", "critical"]
+          },
+          "criteria_checked": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["criterion", "result"],
+              "properties": {
+                "criterion": { "type": "string" },
+                "result": { "type": "string", "enum": ["pass", "fail", "conditional", "skipped"] },
+                "evidence": { "type": "string" }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "result": { "const": "pass" } }
+            },
+            "then": {
+              "properties": { "severity": { "const": "info" } }
+            }
+          },
+          {
+            "if": {
+              "properties": { "result": { "const": "fail" } }
+            },
+            "then": {
+              "properties": { "severity": { "enum": ["error", "critical"] } }
+            }
+          },
+          {
+            "if": {
+              "properties": { "result": { "const": "conditional" } }
+            },
+            "then": {
+              "properties": { "severity": { "const": "warning" } }
+            }
+          },
+          {
+            "if": {
+              "properties": { "result": { "const": "skipped" } }
+            },
+            "then": {
+              "properties": { "severity": { "const": "info" } }
+            }
+          }
+        ]
+      }
+    },
+    "overall_result": {
+      "type": "string",
+      "enum": ["pass", "fail", "conditional", "blocked"]
+    },
+    "overall_severity": {
+      "type": "string",
+      "enum": ["info", "warning", "error", "critical"]
+    },
+    "retry_eligible": {
+      "type": "boolean",
+      "description": "Whether Controller may authorize a retry"
+    },
+    "retry_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "closure_criteria_met": {
+      "type": "boolean"
+    },
+    "decision_by": {
+      "type": ["string", "null"],
+      "description": "Controller identity when result has been acknowledged"
+    },
+    "decided_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "parent_artifact": {
+      "type": "string",
+      "format": "uri",
+      "description": "Link to the review result or test result that triggered verification"
+    },
+    "blocked_reason": {
+      "type": ["string", "null"],
+      "description": "Reason when overall_result is blocked"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "overall_result": { "const": "blocked" } }
+      },
+      "then": {
+        "required": ["blocked_reason"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "overall_result": { "const": "pass" } }
+      },
+      "then": {
+        "properties": { "overall_severity": { "const": "info" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "overall_result": { "const": "fail" } }
+      },
+      "then": {
+        "properties": { "overall_severity": { "enum": ["error", "critical"] } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "overall_result": { "const": "conditional" } }
+      },
+      "then": {
+        "properties": { "overall_severity": { "const": "warning" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "overall_severity": { "const": "critical" } }
+      },
+      "then": {
+        "properties": { "retry_eligible": { "const": false } }
+      }
+    }
+  ]
+}

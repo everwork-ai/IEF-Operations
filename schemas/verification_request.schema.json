@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ief.dev/schemas/verification_request.schema.json",
+  "title": "IEF Verification Request",
+  "description": "Input to the verification module. Contains all evidence and context needed to perform verification.",
+  "type": "object",
+  "required": [
+    "verification_id",
+    "task_id",
+    "run_id",
+    "governance_profile",
+    "artifact_refs",
+    "allowed_files",
+    "forbidden_actions"
+  ],
+  "properties": {
+    "verification_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this verification"
+    },
+    "task_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The task being verified"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The run being verified"
+    },
+    "governance_profile": {
+      "type": "string",
+      "enum": ["G-Lite", "G-Std", "G-Full"],
+      "description": "Governance profile determining evidence requirements and dimension strictness"
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "ArtifactRefs produced by the run being verified"
+    },
+    "context_refs": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "ContextRefs attached to the run"
+    },
+    "allowed_files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Files the runner was authorized to modify"
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Actions the runner was forbidden from taking"
+    },
+    "review_result": {
+      "type": ["object", "null"],
+      "description": "G4 code review result (required for G-Std+)",
+      "properties": {
+        "decision": { "type": "string", "enum": ["approved", "rejected", "rework"] },
+        "reviewer": { "type": "string" },
+        "review_timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ledger_entries": {
+      "type": "array",
+      "description": "Ledger entries for the run (required for G-Std+)",
+      "items": { "$ref": "https://ief.dev/schemas/ledger_entry.schema.json" }
+    },
+    "requested_dimensions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["functional", "governance_compliance", "boundary", "stress"]
+      },
+      "default": ["functional", "governance_compliance", "boundary", "stress"],
+      "description": "Which dimensions to verify. Controller may authorize skipping dimensions."
+    },
+    "retry_count": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Number of previous verification attempts for this run"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "governance_profile": { "enum": ["G-Std", "G-Full"] }
+        }
+      },
+      "then": {
+        "required": ["review_result", "ledger_entries"]
+      }
+    }
+  ]
+}

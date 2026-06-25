@@ -1,0 +1,31 @@
+{
+  "request": {
+    "verification_id": "66666666-6666-6666-6666-666666666666",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "00000000-0000-0000-0000-000000000001",
+    "governance_profile": "G-Std",
+    "artifact_refs": ["https://github.com/everwork-ai/IEF-Program/blob/main/docs/IMPLEMENTATION.md"],
+    "allowed_files": ["docs/IMPLEMENTATION.md"],
+    "forbidden_actions": ["merge", "close"],
+    "requested_dimensions": ["functional", "governance_compliance", "boundary", "stress"],
+    "retry_count": 0
+  },
+  "expected_result": {
+    "verification_id": "66666666-6666-6666-6666-666666666666",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "00000000-0000-0000-0000-000000000001",
+    "verification_timestamp": "2026-06-21T23:05:00+08:00",
+    "verifier": "ief-verifier-fixture",
+    "governance_profile": "G-Std",
+    "dimensions_verified": [],
+    "overall_result": "blocked",
+    "overall_severity": "warning",
+    "retry_eligible": true,
+    "retry_count": 0,
+    "closure_criteria_met": false,
+    "parent_artifact": "https://github.com/everwork-ai/IEF-Program/pull/13",
+    "blocked_reason": "G-Std requires review_result but none provided in VerificationRequest"
+  },
+  "test_id": "T6",
+  "description": "Blocked: G-Std verification requested but no review_result provided"
+}

@@ -1,0 +1,19 @@
+{
+  "description": "Verification infrastructure timed out. This fixture produces a verification_failed ledger event, not a VerificationResult.",
+  "test_id": "T7",
+  "ledger_event": {
+    "entry_id": "99999999-9999-9999-9999-999999999999",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "event_type": "verification_failed",
+    "sequence": 10,
+    "timestamp": "2026-06-21T23:06:00+08:00",
+    "agent_id": "ief-verifier-fixture",
+    "severity": "error",
+    "payload": {
+      "verification_id": "77777777-7777-7777-7777-777777777777",
+      "failure_reason": "Verification timed out after 300 seconds",
+      "retry_eligible": true
+    }
+  }
+}

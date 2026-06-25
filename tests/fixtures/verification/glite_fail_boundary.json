@@ -1,0 +1,40 @@
+{
+  "request": {
+    "verification_id": "22222222-2222-2222-2222-222222222222",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "governance_profile": "G-Lite",
+    "artifact_refs": ["https://github.com/everwork-ai/IEF-Program/blob/main/docs/SMOKE_TEST.md"],
+    "allowed_files": ["docs/SMOKE_TEST.md"],
+    "forbidden_actions": ["merge", "close"],
+    "requested_dimensions": ["boundary"],
+    "retry_count": 0
+  },
+  "expected_result": {
+    "verification_id": "22222222-2222-2222-2222-222222222222",
+    "task_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "run_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "verification_timestamp": "2026-06-21T23:01:00+08:00",
+    "verifier": "ief-verifier-fixture",
+    "governance_profile": "G-Lite",
+    "dimensions_verified": [
+      {
+        "dimension": "boundary",
+        "result": "fail",
+        "severity": "critical",
+        "findings": ["File src/main.py modified but not in allowed_files"],
+        "criteria_checked": [
+          { "criterion": "B-1: Allowed files only", "result": "fail", "evidence": "git diff shows src/main.py" }
+        ]
+      }
+    ],
+    "overall_result": "fail",
+    "overall_severity": "critical",
+    "retry_eligible": false,
+    "retry_count": 0,
+    "closure_criteria_met": false,
+    "parent_artifact": "https://github.com/everwork-ai/IEF-Program/pull/13"
+  },
+  "test_id": "T2",
+  "description": "G-Lite boundary fail: runner modified file outside allowed_files"
+}
