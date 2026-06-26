@@ -554,6 +554,22 @@ For critical failures (e.g., guardrail violation, unauthorized modification):
 - Agents may not unilaterally relax enforcement on Phase 3+ artifacts.
 - CI configuration changes that reduce enforcement level are themselves Phase 3 changes (require Controller authorization).
 
+### 11.4 Critical Transition Constraints
+
+The following constraints are absolute and non-negotiable. They exist to prevent implicit self-advancing execution loops and accidental phase auto-transition coupling between systems.
+
+1. **Phase transitions are non-reversible and externally controlled.**
+   No artifact or system may autonomously revert a phase transition once it has been committed. A Phase 1→2 promotion, once recorded, cannot be self-rolled-back by the artifact's author, the promoting agent, or any downstream consumer. Reversal (demotion) is only permitted via the explicit rollback procedures defined in Section 10, which require an independent authority (Coordinator or Controller) to detect the failure condition, issue the demotion directive, and record it in the dispatch ledger. This prevents an agent from silently undoing governance progress when downstream validation fails.
+
+2. **No phase transition can be triggered by a runner, adapter, or knowledge system.**
+   Phase transitions (both promotion and demotion) may only be initiated by the Coordinator, the Controller, or a human reviewer acting through the PR workflow. Runners (`IEF-Runners`), Adapters (`IEF-Adapters`), and the Knowledge system (`IEF-Knowledge`) are downstream consumers of phase state — they may read the current phase of an artifact and adjust their behavior accordingly, but they must not emit, request, or otherwise trigger a phase transition. Any event from a runner, adapter, or knowledge system that appears to request a phase change must be treated as informational input to the Coordinator, not as an authorization. The Coordinator must independently validate and relay the request through the normal transition matrix (Section 4) before any transition occurs.
+
+**Rationale:** These constraints close two failure modes observed in early agent-loop testing:
+- **Self-advancing loops**: A runner observes its own artifact's phase and emits a "promote to next phase" event, creating an uncontrolled feedback cycle that bypasses review.
+- **Cross-system coupling**: An adapter or knowledge system reacts to a phase change in one artifact by automatically cascading phase changes to related artifacts, without Controller visibility or authorization.
+
+Both failure modes violate the core governance principle that phase transitions are deliberate, evidence-based, and Controller-gated decisions.
+
 ---
 
 ## 12. Interaction with Companion Specifications
