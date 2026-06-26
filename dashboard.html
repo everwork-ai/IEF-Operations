@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IEF Project Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  background: #0d1117;
+  color: #c9d1d9;
+  line-height: 1.5;
+  padding: 24px;
+  min-height: 100vh;
+}
+
+.container { max-width: 1400px; margin: 0 auto; }
+
+/* Header */
+.header {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  color: #58a6ff;
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.header .timestamp {
+  color: #8b949e;
+  font-size: 14px;
+}
+
+/* Project Goal */
+.goal {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 24px;
+  font-size: 15px;
+  color: #8b949e;
+}
+
+/* Overall Progress */
+.overall-progress {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.overall-progress h2 {
+  color: #58a6ff;
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+
+.progress-bar {
+  background: #21262d;
+  border-radius: 6px;
+  height: 24px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  background: linear-gradient(90deg, #238636 0%, #2ea043 100%);
+  height: 100%;
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 12px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* Module Grid */
+.modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.module-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 20px;
+  transition: border-color 0.2s;
+}
+
+.module-card:hover { border-color: #58a6ff; }
+
+.module-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.module-name {
+  color: #f0f6fc;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge.complete { background: #238636; color: #fff; }
+.badge.in-progress { background: #1f6feb; color: #fff; }
+.badge.planning { background: #6e40c9; color: #fff; }
+.badge.blocked { background: #da3633; color: #fff; }
+
+.module-desc {
+  color: #8b949e;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.module-progress {
+  margin-bottom: 16px;
+}
+
+.module-progress .progress-bar { height: 8px; }
+.module-progress .progress-fill { padding-right: 0; }
+
+.artifacts {
+  margin-bottom: 12px;
+}
+
+.artifacts-label {
+  color: #8b949e;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.artifact-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.artifact {
+  background: #21262d;
+  color: #58a6ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+}
+
+.activity {
+  color: #8b949e;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.gaps {
+  background: #3d1a1a;
+  border-left: 3px solid #da3633;
+  padding: 8px 12px;
+  color: #f85149;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+/* Repository Table */
+.repo-section {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.repo-section h2 {
+  color: #58a6ff;
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+
+.repo-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.repo-table th {
+  background: #21262d;
+  color: #f0f6fc;
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 1px solid #30363d;
+}
+
+.repo-table td {
+  padding: 12px;
+  border-bottom: 1px solid #21262d;
+  color: #c9d1d9;
+}
+
+.repo-table tr:hover { background: #1c2128; }
+
+.repo-name { color: #58a6ff; font-weight: 500; }
+
+.health {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.health.healthy { background: #238636; color: #fff; }
+.health.active { background: #1f6feb; color: #fff; }
+.health.early { background: #6e40c9; color: #fff; }
+
+/* Risk Tracker */
+.risks {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.risks h2 {
+  color: #58a6ff;
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+
+.risk-item {
+  background: #21262d;
+  border-left: 3px solid #d29922;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+}
+
+.risk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.risk-title {
+  color: #f0f6fc;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.severity {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.severity.high { background: #da3633; color: #fff; }
+.severity.medium { background: #d29922; color: #fff; }
+.severity.low { background: #238636; color: #fff; }
+
+.risk-desc {
+  color: #8b949e;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.risk-mitigation {
+  color: #7ee787;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Activity Timeline */
+.timeline {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 24px;
+}
+
+.timeline h2 {
+  color: #58a6ff;
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #21262d;
+}
+
+.timeline-item:last-child { border-bottom: none; }
+
+.timeline-date {
+  color: #8b949e;
+  font-size: 13px;
+  min-width: 100px;
+  font-family: 'Courier New', monospace;
+}
+
+.timeline-event {
+  color: #c9d1d9;
+  font-size: 14px;
+  flex: 1;
+}
+
+.timeline-link {
+  color: #58a6ff;
+  text-decoration: none;
+}
+
+.timeline-link:hover { text-decoration: underline; }
+</style>
+</head>
+<!--
+  ARCHITECTURAL DECLARATION:
+  This dashboard is a read-only projection of the Operations ledger state.
+  - Data source: Operations ledger only (tasks.json, GitHub PRs/issues)
+  - Refresh: passive polling by Dashboard Agent cron (every 12h)
+  - No state computation, mutation, or execution hooks
+  - No task lifecycle inference from visual state
+  - No scheduling triggers or execution logic
+  This file does NOT constitute a secondary state authority.
+-->
+<body>
+<div class="container">
+  <div class="header">
+    <h1>IEF Project Dashboard</h1>
+    <div class="timestamp">Last updated: <span id="last-updated"></span></div>
+  </div>
+
+  <div class="goal">
+    <strong>IEF</strong> (Intelligent Execution Framework) is a framework for producing AI digital workers. 
+    It provides a structured, governance-based approach to autonomous agent execution with verification, 
+    observability, and human oversight.
+  </div>
+
+  <div class="overall-progress">
+    <h2>Overall Progress</h2>
+    <div class="progress-bar">
+      <div class="progress-fill" id="overall-progress"></div>
+    </div>
+  </div>
+
+  <div class="modules" id="modules-grid"></div>
+
+  <div class="repo-section">
+    <h2>Repository Status</h2>
+    <table class="repo-table">
+      <thead>
+        <tr>
+          <th>Repository</th>
+          <th>Open PRs</th>
+          <th>Merged PRs</th>
+          <th>Last Activity</th>
+          <th>Health</th>
+        </tr>
+      </thead>
+      <tbody id="repo-table-body"></tbody>
+    </table>
+  </div>
+
+  <div class="risks">
+    <h2>Risk Tracker</h2>
+    <div id="risks-list"></div>
+  </div>
+
+  <div class="timeline">
+    <h2>Recent Activity</h2>
+    <div id="timeline-list"></div>
+  </div>
+
+  <div class="goal" style="text-align: center; font-size: 12px; padding: 12px; margin-top: 24px; color: #484f58;">
+    Read-only projection &mdash; Data source: Operations ledger &mdash; Refresh: Dashboard Agent cron (12h)
+  </div>
+</div>
+
+<script>
+// Render dashboard from embedded data
+function renderDashboard(data) {
+  document.getElementById('last-updated').textContent = data.lastUpdated;
+  
+  // Overall progress
+  const overallBar = document.getElementById('overall-progress');
+  overallBar.style.width = data.overallProgress + '%';
+  overallBar.textContent = data.overallProgress + '%';
+  
+  // Module cards
+  const modulesGrid = document.getElementById('modules-grid');
+  modulesGrid.innerHTML = data.modules.map(module => `
+    <div class="module-card">
+      <div class="module-header">
+        <div class="module-name">${module.name}</div>
+        <span class="badge ${module.status.toLowerCase().replace('_', '-')}">${module.status.replace('_', ' ')}</span>
+      </div>
+      <div class="module-desc">${module.description}</div>
+      <div class="module-progress">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${module.progress}%">${module.progress}%</div>
+        </div>
+      </div>
+      <div class="artifacts">
+        <div class="artifacts-label">Key Artifacts</div>
+        <div class="artifact-list">
+          ${module.artifacts.map(a => `<span class="artifact">${a}</span>`).join('')}
+        </div>
+      </div>
+      <div class="activity">${module.activity}</div>
+      ${module.gaps ? `<div class="gaps">${module.gaps}</div>` : ''}
+    </div>
+  `).join('');
+  
+  // Repository table
+  const repoBody = document.getElementById('repo-table-body');
+  repoBody.innerHTML = data.repos.map(repo => `
+    <tr>
+      <td><span class="repo-name">${repo.name}</span></td>
+      <td>${repo.openPRs}</td>
+      <td>${repo.mergedPRs}</td>
+      <td>${repo.lastActivity}</td>
+      <td><span class="health ${repo.health.toLowerCase()}">${repo.health}</span></td>
+    </tr>
+  `).join('');
+  
+  // Risks
+  const risksList = document.getElementById('risks-list');
+  risksList.innerHTML = data.risks.map(risk => `
+    <div class="risk-item">
+      <div class="risk-header">
+        <div class="risk-title">${risk.title}</div>
+        <span class="severity ${risk.severity.toLowerCase()}">${risk.severity}</span>
+      </div>
+      <div class="risk-desc">${risk.description}</div>
+      ${risk.mitigation ? `<div class="risk-mitigation">Mitigation: ${risk.mitigation}</div>` : ''}
+    </div>
+  `).join('');
+  
+  // Timeline
+  const timelineList = document.getElementById('timeline-list');
+  timelineList.innerHTML = data.timeline.map(event => `
+    <div class="timeline-item">
+      <div class="timeline-date">${event.date}</div>
+      <div class="timeline-event">
+        ${event.link ? `<a href="${event.link}" class="timeline-link">${event.event}</a>` : event.event}
+      </div>
+    </div>
+  `).join('');
+}
+</script>
+
+<script id="dashboard-data" type="application/json">
+{
+  "lastUpdated": "2026-06-26T10:25:00+08:00",
+  "overallProgress": 72,
+  "modules": [
+    {
+      "name": "Governance Framework",
+      "status": "COMPLETE",
+      "description": "Classification system, mutation matrix, freeze spec, and evolution guardrail for controlled spec evolution.",
+      "progress": 95,
+      "artifacts": ["EVOLUTION_GUARDRAIL_SPEC.md", "VERIFICATION_HARDENING_SPEC.md", "CONTROL_PLANE_FREEZE_SPEC.md"],
+      "activity": "Evolution Guardrail delivered and merged (PR #5, #6, #7)",
+      "gaps": null
+    },
+    {
+      "name": "Verification System",
+      "status": "COMPLETE",
+      "description": "Spectral lint rules, TypeSpec contracts, and quality gates for automated spec validation.",
+      "progress": 100,
+      "artifacts": ["VERIFICATION_SPEC_V0.yaml", "VERIFICATION_HARDENING_SPEC.md", "spectral.yaml"],
+      "activity": "Verification hardening spec delivered (G8-2)",
+      "gaps": null
+    },
+    {
+      "name": "Execution Pipeline",
+      "status": "IN_PROGRESS",
+      "description": "PM dispatch, operator execution, and trigger system for autonomous agent workflow.",
+      "progress": 85,
+      "artifacts": ["AGENTS.md", "dispatch_ledger.json", "trigger_system/"],
+      "activity": "Execution Enforcement Phase Model designed (governance only)",
+      "gaps": "Phase model implementation pending; CI integration deferred"
+    },
+    {
+      "name": "Consumer Interface",
+      "status": "IN_PROGRESS",
+      "description": "Adapter contracts and A2A alignment for external system integration.",
+      "progress": 85,
+      "artifacts": ["ADAPTER_CONTRACT_V0.yaml", "IKE_CONSUMER_STABILITY_SPEC.md"],
+      "activity": "Adapter contract v0 delivered; consumer stability spec defined",
+      "gaps": "Consumer SDK not started"
+    },
+    {
+      "name": "Knowledge System",
+      "status": "IN_PROGRESS",
+      "description": "Context packs, run summaries, and knowledge base integration for agent memory.",
+      "progress": 65,
+      "artifacts": ["CONTEXT_PACK_V0.yaml", "RUN_SUMMARY_V0.yaml", "KNOWLEDGE_BASE_INTEGRATION_V0.yaml"],
+      "activity": "Knowledge Base Integration Contract v0 delivered (PR #5)",
+      "gaps": "Knowledge base implementation pending"
+    },
+    {
+      "name": "Spec Governance",
+      "status": "PLANNING",
+      "description": "Spectral lint scoping and enforcement rules for automated spec quality.",
+      "progress": 40,
+      "artifacts": ["SPEC_GOVERNANCE_SPECTRAL_LINT_PLAN.md", "CLASSIFICATION_REGISTRY_SPEC_PLAN.md"],
+      "activity": "Spectral lint scoping plan complete; Classification Registry designed",
+      "gaps": "Enforcement deferred to post-release; CI not activated"
+    },
+    {
+      "name": "Observability",
+      "status": "IN_PROGRESS",
+      "description": "Task ledger schema and dashboard for real-time pipeline visibility.",
+      "progress": 30,
+      "artifacts": ["dashboard.html", "CORE_SCHEMA_DESIGN.md"],
+      "activity": "Dashboard HTML delivered (this file)",
+      "gaps": "Task ledger implementation pending; dashboard auto-update cron not configured"
+    }
+  ],
+  "repos": [
+    {
+      "name": "everwork-ai/IEF-Program",
+      "openPRs": 2,
+      "mergedPRs": 1,
+      "lastActivity": "2026-06-26",
+      "health": "Healthy"
+    },
+    {
+      "name": "everwork-ai/IEF-Operations",
+      "openPRs": 3,
+      "mergedPRs": 7,
+      "lastActivity": "2026-06-26",
+      "health": "Active"
+    },
+    {
+      "name": "everwork-ai/IEF-Adapters",
+      "openPRs": 1,
+      "mergedPRs": 0,
+      "lastActivity": "2026-06-25",
+      "health": "Early"
+    },
+    {
+      "name": "everwork-ai/IEF-Runners",
+      "openPRs": 1,
+      "mergedPRs": 0,
+      "lastActivity": "2026-06-25",
+      "health": "Early"
+    },
+    {
+      "name": "everwork-ai/IEF-Knowledge",
+      "openPRs": 1,
+      "mergedPRs": 0,
+      "lastActivity": "2026-06-26",
+      "health": "Early"
+    }
+  ],
+  "risks": [
+    {
+      "title": "Phase Model Implementation Gap",
+      "severity": "Medium",
+      "description": "Execution Enforcement Phase Model designed but not implemented. No automated phase-skip detection or CI enforcement.",
+      "mitigation": "Defer implementation to post-release; manual compliance checks in interim"
+    },
+    {
+      "title": "Spectral Lint Not Activated",
+      "severity": "Medium",
+      "description": "Spectral lint rules scoped but not integrated into CI pipeline. Spec quality relies on manual review.",
+      "mitigation": "Activation deferred until Classification Registry stable; manual Spectral runs recommended"
+    },
+    {
+      "title": "Knowledge Base Implementation Pending",
+      "severity": "Low",
+      "description": "Knowledge Base Integration Contract defined but no implementation. Context pack and run summary contracts delivered.",
+      "mitigation": "Implementation scheduled for next phase; contracts provide clear interface spec"
+    },
+    {
+      "title": "Dashboard Auto-Update Not Configured",
+      "severity": "Low",
+      "description": "Dashboard HTML delivered but auto-update cron job not configured. Data becomes stale without manual updates.",
+      "mitigation": "Configure Dashboard Agent cron (12h cycle) in next operations cycle"
+    }
+  ],
+  "timeline": [
+    {
+      "date": "2026-06-26",
+      "event": "Execution Enforcement Phase Model v0 designed (IEF-Program#11)",
+      "link": "https://github.com/everwork-ai/IEF-Program/issues/11"
+    },
+    {
+      "date": "2026-06-26",
+      "event": "Knowledge Base Integration Contract v0 delivered (IEF-Knowledge#3)",
+      "link": "https://github.com/everwork-ai/IEF-Knowledge/issues/3"
+    },
+    {
+      "date": "2026-06-26",
+      "event": "Dashboard HTML delivered (this file)",
+      "link": null
+    },
+    {
+      "date": "2026-06-25",
+      "event": "Runner Interface Contract v0 delivered (IEF-Runners#2)",
+      "link": "https://github.com/everwork-ai/IEF-Runners/issues/2"
+    },
+    {
+      "date": "2026-06-25",
+      "event": "Adapter Contract v0 delivered (IEF-Adapters#2)",
+      "link": "https://github.com/everwork-ai/IEF-Adapters/issues/2"
+    },
+    {
+      "date": "2026-06-25",
+      "event": "Evolution Guardrail Spec delivered and merged (IEF-Operations PR #7)",
+      "link": "https://github.com/everwork-ai/IEF-Operations/pull/7"
+    },
+    {
+      "date": "2026-06-25",
+      "event": "Verification Hardening Spec delivered (IEF-Operations G8-2)",
+      "link": "https://github.com/everwork-ai/IEF-Operations/pull/6"
+    },
+    {
+      "date": "2026-06-25",
+      "event": "Control Plane Freeze Spec delivered (IEF-Operations G8-1)",
+      "link": "https://github.com/everwork-ai/IEF-Operations/pull/5"
+    },
+    {
+      "date": "2026-06-24",
+      "event": "Classification Registry Spec Plan designed (IEF-Program#11)",
+      "link": "https://github.com/everwork-ai/IEF-Program/issues/11"
+    },
+    {
+      "date": "2026-06-23",
+      "event": "Stage G planning complete; G8-1 through G8-4 authorized",
+      "link": "https://github.com/everwork-ai/IEF-Program/issues/9"
+    }
+  ]
+}
+</script>
+
+<script>
+// Parse embedded data and render
+const dataScript = document.getElementById('dashboard-data');
+const dashboardData = JSON.parse(dataScript.textContent);
+renderDashboard(dashboardData);
+</script>
+</body>
+</html>
