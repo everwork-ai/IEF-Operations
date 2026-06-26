@@ -338,6 +338,16 @@ body {
 .timeline-link:hover { text-decoration: underline; }
 </style>
 </head>
+<!--
+  ARCHITECTURAL DECLARATION:
+  This dashboard is a read-only projection of the Operations ledger state.
+  - Data source: Operations ledger only (tasks.json, GitHub PRs/issues)
+  - Refresh: passive polling by Dashboard Agent cron (every 12h)
+  - No state computation, mutation, or execution hooks
+  - No task lifecycle inference from visual state
+  - No scheduling triggers or execution logic
+  This file does NOT constitute a secondary state authority.
+-->
 <body>
 <div class="container">
   <div class="header">
@@ -384,6 +394,10 @@ body {
   <div class="timeline">
     <h2>Recent Activity</h2>
     <div id="timeline-list"></div>
+  </div>
+
+  <div class="goal" style="text-align: center; font-size: 12px; padding: 12px; margin-top: 24px; color: #484f58;">
+    Read-only projection &mdash; Data source: Operations ledger &mdash; Refresh: Dashboard Agent cron (12h)
   </div>
 </div>
 
